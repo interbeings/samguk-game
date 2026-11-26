@@ -101,7 +101,7 @@ cv.addEventListener('pointerdown',e=>{audioInit();
   tapPos={x:(sx-(SW-cw)/2)*W/cw,y:(sy-(SH-ch)/2)*H/ch};press('start');setTimeout(()=>release('start'),50);});
 
 /* ================= 사운드 ================= */
-let AC=null,master=null,muted=false,bgmOn=false,noiseBuf=null,bgmT=0,bgmStep=0,bgmNote=4;
+let AC=null,master=null,muted=false,bgmOn=true,noiseBuf=null,bgmT=0,bgmStep=0,bgmNote=4;
 function audioInit(){
   if(AC){if(AC.state==='suspended')AC.resume();return;}
   try{AC=new(window.AudioContext||window.webkitAudioContext)();master=AC.createGain();master.gain.value=.5;master.connect(AC.destination);}catch(e){}
@@ -143,22 +143,87 @@ const SFX={
   move(){tone(700,.05,'triangle',.12);},
   pick(){tone(523,.1,'triangle',.18);tone(784,.18,'triangle',.18,null,.09);}
 };
-const PENTA=[0,2,4,7,9];
+/* ================= 배경음악 (장면별 곡: 타이틀 · 전투 · 보스) ================= */
+// 악보: 8분음표 한 칸씩. 음이름(E5), '-' = 앞 음 늘이기, '.' = 쉼표
+const SONGS={
+  title:{bpm:84,drum:'taiko',
+    lead:'E5 - - G5 A5 - - - B5 - A5 G5 E5 - - - D5 - E5 G5 A5 - B5 - A5 - - - - - . . '+
+         'B5 - - D6 E6 - - - D6 - B5 A5 G5 - - - A5 - G5 E5 D5 - E5 - E5 - - - - - . .',
+    roots:'E2m C2M D2M A2m G2M D2M A2m E2m'},
+  battle:{bpm:138,drum:'battle',
+    lead:'E5 - G5 A5 B5 - A5 G5 E5 - D5 E5 G5 - - . A5 - B5 D6 E6 - D6 B5 A5 - G5 A5 B5 - - . '+
+         'E6 - D6 B5 D6 - B5 A5 G5 - A5 G5 E5 - D5 E5 G5 A5 B5 - A5 G5 E5 D5 E5 - - - . . B4 D5 '+
+         'B5 - A5 B5 D6 - E6 . D6 B5 A5 G5 A5 - - . G5 - E5 G5 A5 - B5 A5 G5 E5 D5 E5 - - . . '+
+         'E6 - E6 D6 B5 - D6 E6 G6 - E6 D6 B5 - A5 B5 A5 G5 E5 G5 A5 - B5 D6 E6 - - - - . . .',
+    roots:'E2m E2m A2m A2m C2M G2M A2m B2m G2M D2M E2m E2m C2M G2M D2M E2m'},
+  boss:{bpm:150,drum:'boss',
+    lead:'E5 E5 . E5 F5 - E5 . B4 - . B4 D5 - E5 . E5 E5 . G5 F5 - E5 D5 E5 - - - B4 . B4 . '+
+         'E6 - D6 - B5 - A5 - B5 - F5 - E5 - . . G5 F5 E5 D5 E5 F5 G5 A5 B5 - - - F5 - - .',
+    roots:'E2m E2m E2m E2m C2M F2M E2m F2M'}
+};
+const NOTE_I={C:0,D:2,E:4,F:5,G:7,A:9,B:11};
+function nfreq(n){return 440*Math.pow(2,(NOTE_I[n[0]]+12*(+n[n.length-1]+1)-69)/12);}
+for(const k in SONGS){const s=SONGS[k];
+  const tk=s.lead.trim().split(/\s+/);s.ev=[];
+  tk.forEach((t,i)=>{if(t==='-'||t==='.')return;let d=1;while(tk[i+d]==='-')d++;s.ev[i]={f:nfreq(t),d};});
+  s.len=tk.length;s.bars=s.roots.split(' ').map(r=>({f:nfreq(r.slice(0,2)),minor:r[2]==='m'}));}
+let bgmGain=null,curSong='',wantSong='';
+function bnote(f,d,type,v,t,dest,att=.01){
+  const o=AC.createOscillator(),g=AC.createGain();o.type=type;o.frequency.value=f;
+  g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+att);g.gain.setTargetAtTime(0,t+d*.75,d*.25+.02);
+  o.connect(g);g.connect(dest);o.start(t);o.stop(t+d+.4);
+}
+function bnoise(d,v,freq,t,dest,type='highpass'){
+  if(!noiseBuf){noiseBuf=AC.createBuffer(1,AC.sampleRate,AC.sampleRate);const a=noiseBuf.getChannelData(0);for(let i=0;i<a.length;i++)a[i]=Math.random()*2-1;}
+  const s=AC.createBufferSource();s.buffer=noiseBuf;const bf=AC.createBiquadFilter();bf.type=type;bf.frequency.value=freq;
+  const g=AC.createGain();g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+d);
+  s.connect(bf);bf.connect(g);g.connect(dest);s.start(t);s.stop(t+d+.03);
+}
+function bkick(t,v,dest){const o=AC.createOscillator(),g=AC.createGain();o.type='sine';
+  o.frequency.setValueAtTime(140,t);o.frequency.exponentialRampToValueAtTime(40,t+.25);
+  g.gain.setValueAtTime(v,t);g.gain.exponentialRampToValueAtTime(.001,t+.35);o.connect(g);g.connect(dest);o.start(t);o.stop(t+.4);}
+function pickSong(){
+  if(!bgmOn||G.paused)return '';
+  const m=G.mode;
+  if(m==='title'||m==='select'||m==='ending'||m==='loading')return 'title';
+  if(m==='over')return '';
+  return G.bossOn&&!G.bossDead?'boss':'battle';
+}
 function bgmTick(){
-  if(!AC||muted||!bgmOn)return;
-  const spb=60/116/2;
+  if(!AC)return;
+  if(!bgmGain){bgmGain=AC.createGain();bgmGain.gain.value=0;bgmGain.connect(master);}
+  wantSong=muted?'':pickSong();
+  if(wantSong!==curSong){
+    bgmGain.gain.cancelScheduledValues(AC.currentTime);
+    bgmGain.gain.setTargetAtTime(0,AC.currentTime,.15);
+    if(wantSong){const old=bgmGain;setTimeout(()=>{try{old.disconnect();}catch(e){}},1500);
+      bgmGain=AC.createGain();bgmGain.gain.value=0;bgmGain.connect(master);
+      bgmGain.gain.setTargetAtTime(.55,AC.currentTime+.3,.3);bgmT=AC.currentTime+.35;bgmStep=0;}
+    curSong=wantSong;
+  }
+  if(!curSong)return;
+  const S=SONGS[curSong],e8=60/S.bpm/2,dst=bgmGain;   // 8분음표 길이
   if(bgmT<AC.currentTime)bgmT=AC.currentTime+.05;
-  while(bgmT<AC.currentTime+.25){
-    const st=bgmStep%16,d=bgmT-AC.currentTime;
-    if(st===0||st===6||st===8||st===11)drum(d,st===0?1:.55);
-    if(st%4===2)noise(.04,.05,6000,1,d);
-    if(st%2===0&&Math.random()<.72){
-      bgmNote=Math.max(0,Math.min(9,bgmNote+[-2,-1,1,2,0][Math.random()*5|0]));
-      const n=PENTA[bgmNote%5]+12*Math.floor(bgmNote/5);
-      tone(196*Math.pow(2,n/12),spb*1.7,'triangle',.055,null,d);
+  while(bgmT<AC.currentTime+.3){
+    const t=bgmT,i=bgmStep%S.len,bar=S.bars[(i>>3)%S.bars.length],s8=i%8;
+    const ev=S.ev[i];
+    if(ev){bnote(ev.f,ev.d*e8,'square',.07,t,dst);bnote(ev.f*2,ev.d*e8,'triangle',.04,t,dst);}   // 주선율 (피리 느낌)
+    // 베이스
+    const bp=curSong==='title'?[1,0,0,0,1,0,0,0]:curSong==='boss'?[1,1,1,1,1,1,1,1]:[1,0,1,2,0,1,3,1];
+    if(bp[s8])bnote(bar.f*(bp[s8]===2?2:bp[s8]===3?1.5:1),e8*(curSong==='title'?3.5:.9),'triangle',.22,t,dst);
+    // 화음 (마디 첫 박에 길게)
+    if(s8===0){const third=bar.minor?1.1892:1.2599;
+      [1,third,1.4983].forEach(r=>bnote(bar.f*4*r,e8*7.5,'sawtooth',.018,t,dst,.15));}
+    // 타악
+    if(S.drum==='taiko'){if(s8===0||s8===4)bkick(t,s8===0?.7:.45,dst);if(s8===6&&(i>>3)%2)bkick(t,.35,dst);}
+    else{
+      if(s8===0||s8===3||(S.drum==='boss'&&s8===4))bkick(t,.6,dst);
+      if(s8===2||s8===6)bnoise(.16,.22,1200,t,dst,'bandpass');            // 스네어(북)
+      bnoise(.04,S.drum==='boss'?.07:.05,7000,t,dst);                      // 하이햇
+      if(S.drum==='battle'&&s8===7)bnoise(.04,.04,7000,t+e8/2,dst);
+      if(s8===0&&(i>>3)%4===0)bnoise(.9,.12,5000,t,dst);                    // 심벌(4마디마다)
     }
-    if(st===0)tone([98,87.3,110,98][(bgmStep>>4)%4],spb*15,'sine',.07,null,d);
-    bgmT+=spb;bgmStep++;
+    bgmT+=e8;bgmStep++;
   }
 }
 
