@@ -6,23 +6,26 @@
 <title>청룡언월전 — 오호대장 무쌍</title>
 <style>
 html,body{margin:0;height:100%;background:#0b0a09;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
-#wrap{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+#stage{position:fixed;left:0;top:0;width:100vw;height:100vh;transform-origin:0 0;overflow:hidden}
+#wrap{position:absolute;inset:0;display:flex;align-items:center;justify-content:center}
 canvas{display:block;background:#000;box-shadow:0 0 40px #000}
-#touch{position:fixed;inset:0;pointer-events:none;display:none}
+#touch{position:absolute;inset:0;pointer-events:none;display:none}
 #touch.on{display:block}
 .tb{position:absolute;pointer-events:auto;border-radius:50%;background:rgba(255,255,255,.13);border:2px solid rgba(255,255,255,.35);color:#fff;font:bold 17px 'Malgun Gothic',sans-serif;display:flex;align-items:center;justify-content:center;touch-action:none}
 .tb.down{background:rgba(255,215,110,.45)}
 </style>
 </head>
 <body>
+<div id="stage">
 <div id="wrap"><canvas id="cv" width="960" height="540"></canvas></div>
 <div id="touch">
-  <div class="tb" data-k="left"  style="left:3%;bottom:7%;width:76px;height:76px">◀</div>
-  <div class="tb" data-k="right" style="left:calc(3% + 92px);bottom:7%;width:76px;height:76px">▶</div>
-  <div class="tb" data-k="jump"  style="right:calc(3% + 190px);bottom:5%;width:70px;height:70px">점프</div>
-  <div class="tb" data-k="atk"   style="right:calc(3% + 92px);bottom:11%;width:86px;height:86px">공격</div>
-  <div class="tb" data-k="sp"    style="right:3%;bottom:25%;width:72px;height:72px">필살</div>
-  <div class="tb" data-k="pause" style="right:2%;top:12%;width:46px;height:46px;font-size:14px">❚❚</div>
+  <div class="tb" data-k="left">◀</div>
+  <div class="tb" data-k="right">▶</div>
+  <div class="tb" data-k="jump">점프</div>
+  <div class="tb" data-k="atk">공격</div>
+  <div class="tb" data-k="sp">필살</div>
+  <div class="tb" data-k="pause">❚❚</div>
+</div>
 </div>
 <script>
 'use strict';
@@ -35,8 +38,43 @@ const bgc=document.createElement('canvas');bgc.width=480;bgc.height=270;const bg
 const W=960, H=540, GY=468, HERO_H=120, FOE_H=94, BOSS_H=138;
 const FT="'Nanum Myeongjo','Batang','Noto Serif KR',serif";
 const FU="'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif";
-function fit(){const s=Math.min(innerWidth/W,innerHeight/H);cv.style.width=W*s+'px';cv.style.height=H*s+'px';}
-addEventListener('resize',fit);fit();
+/* 화면 맞춤 — 휴대폰을 세로로 들고 있으면 게임 화면을 옆으로 눕혀서(가로 모드) 보여줌 */
+const stage=document.getElementById('stage');
+const isTouch=matchMedia('(pointer:coarse)').matches||'ontouchstart' in window;
+let ROT=false,SW=innerWidth,SH=innerHeight;
+function layoutTouch(){
+  const b=Math.max(52,Math.min(100,SH*.2,SW/5.6)),g=b*.22,pd=Math.max(10,b*.18);
+  const set=(k,o)=>{const e=document.querySelector('#touch .tb[data-k="'+k+'"]');const st=e.style;
+    st.left=st.right=st.top=st.bottom='';for(const q in o)st[q]=o[q]+'px';
+    st.fontSize=Math.round(o.width*(k==='pause'?.3:.24))+'px';};
+  const a=b*1.15,j=b,sp=b*.95;
+  set('left',{left:pd,bottom:pd,width:b,height:b});
+  set('right',{left:pd+b+g,bottom:pd,width:b,height:b});
+  set('atk',{right:pd,bottom:pd,width:a,height:a});
+  set('jump',{right:pd+a+g,bottom:pd,width:j,height:j});
+  set('sp',{right:pd+(a-sp)/2,bottom:pd+a+g,width:sp,height:sp});
+  set('pause',{right:pd,top:pd,width:b*.6,height:b*.6});
+}
+function fit(){
+  ROT=isTouch&&innerHeight>innerWidth;
+  SW=ROT?innerHeight:innerWidth;SH=ROT?innerWidth:innerHeight;
+  stage.style.width=SW+'px';stage.style.height=SH+'px';
+  stage.style.transform=ROT?'translateY('+innerHeight+'px) rotate(-90deg)':'';
+  const s=Math.min(SW/W,SH/H);cv.style.width=W*s+'px';cv.style.height=H*s+'px';
+  layoutTouch();
+}
+addEventListener('resize',fit);addEventListener('orientationchange',()=>setTimeout(fit,200));fit();
+/* 첫 터치 때 전체화면 + 가로 고정 시도 (안드로이드 크롬). 안 되면 위의 눕힌 화면으로 플레이 */
+let triedLand=false;
+function goLandscape(){
+  if(triedLand||!isTouch)return;triedLand=true;
+  const el=document.documentElement,rq=el.requestFullscreen||el.webkitRequestFullscreen;
+  if(!rq)return;
+  try{Promise.resolve(rq.call(el,{navigationUI:'hide'})).then(()=>{
+    if(screen.orientation&&screen.orientation.lock)return screen.orientation.lock('landscape');
+  }).catch(()=>{}).then(()=>setTimeout(fit,300));}catch(e){}
+}
+addEventListener('pointerdown',goLandscape,true);
 
 /* ================= 입력 ================= */
 const K={}, P={};
@@ -48,7 +86,7 @@ addEventListener('keydown',e=>{const k=KEYMAP[e.code];if(!k)return;e.preventDefa
 addEventListener('keyup',e=>{const k=KEYMAP[e.code];if(k)release(k);});
 addEventListener('blur',()=>{for(const k in K)K[k]=0;});
 const touchUI=document.getElementById('touch');
-if(matchMedia('(pointer:coarse)').matches||'ontouchstart' in window)touchUI.classList.add('on');
+if(isTouch)touchUI.classList.add('on');
 touchUI.querySelectorAll('.tb').forEach(b=>{
   const k=b.dataset.k;
   const dn=e=>{e.preventDefault();audioInit();press(k);if(k==='atk')press('start');b.classList.add('down');};
@@ -57,8 +95,10 @@ touchUI.querySelectorAll('.tb').forEach(b=>{
   b.addEventListener('pointercancel',up);b.addEventListener('pointerleave',up);
 });
 let tapPos=null;
-cv.addEventListener('pointerdown',e=>{audioInit();const r=cv.getBoundingClientRect();
-  tapPos={x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height};press('start');setTimeout(()=>release('start'),50);});
+cv.addEventListener('pointerdown',e=>{audioInit();
+  const sx=ROT?innerHeight-e.clientY:e.clientX, sy=ROT?e.clientX:e.clientY;   // 눕힌 화면이면 좌표도 돌려줌
+  const cw=parseFloat(cv.style.width),ch=parseFloat(cv.style.height);
+  tapPos={x:(sx-(SW-cw)/2)*W/cw,y:(sy-(SH-ch)/2)*H/ch};press('start');setTimeout(()=>release('start'),50);});
 
 /* ================= 사운드 ================= */
 let AC=null,master=null,muted=false,bgmOn=false,noiseBuf=null,bgmT=0,bgmStep=0,bgmNote=4;
