@@ -8,7 +8,8 @@ $guanF = [IO.File]::ReadAllText("$s\guan_atlas.json") -replace '"jumpA":\[(\d+),
 $parts += '"guan":{"src":"' + (B64 "$s\guan_atlas.png") + '","h":160,"face":1,"f":' + $guanF + '}'
 $sets = @(
   @{k='zhangfei'; face=1}, @{k='zhaoyun'; face=1}, @{k='huangzhong'; face=1}, @{k='weiyan'; face=1},
-  @{k='foe'; face=1}, @{k='boss1'; face=1}, @{k='boss2'; face=1}, @{k='boss3'; face=1}
+  @{k='foe'; face=1}, @{k='boss1'; face=1}, @{k='boss2'; face=1}, @{k='boss3'; face=1},
+  @{k='boss4'; face=1}, @{k='boss5'; face=1}, @{k='boss6'; face=1}
 )
 foreach ($e in $sets) {
   $k = $e.k
