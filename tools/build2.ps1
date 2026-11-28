@@ -7,7 +7,7 @@ $parts = @()
 $guanF = [IO.File]::ReadAllText("$s\guan_atlas.json") -replace '"jumpA":\[(\d+),(\d+),(\d+),(\d+),\d+', '"jumpA":[$1,$2,$3,$4,52' -replace '"jumpB":\[(\d+),(\d+),(\d+),(\d+),\d+', '"jumpB":[$1,$2,$3,$4,50'
 $parts += '"guan":{"src":"' + (B64 "$s\guan_atlas.png") + '","h":160,"face":1,"f":' + $guanF + '}'
 $sets = @(
-  @{k='zhangfei'; face=1}, @{k='zhaoyun'; face=1}, @{k='huangzhong'; face=1}, @{k='weiyan'; face=1},
+  @{k='zhangfei'; face=1}, @{k='zhaoyun'; face=1}, @{k='huangzhong'; face=1}, @{k='weiyan'; face=1}, @{k='horse'; face=1},
   @{k='foe'; face=1}, @{k='boss1'; face=1}, @{k='boss2'; face=1}, @{k='boss3'; face=1},
   @{k='boss4'; face=1}, @{k='boss5'; face=1}, @{k='boss6'; face=1}
 )

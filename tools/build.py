@@ -7,7 +7,7 @@ gf=open(f'{s}/guan_atlas.json',encoding='utf-8-sig').read()
 gf=re.sub(r'"jumpA":\[(\d+),(\d+),(\d+),(\d+),\d+',r'"jumpA":[\1,\2,\3,\4,52',gf)
 gf=re.sub(r'"jumpB":\[(\d+),(\d+),(\d+),(\d+),\d+',r'"jumpB":[\1,\2,\3,\4,50',gf)
 parts.append('"guan":{"src":"'+B64(f'{s}/guan_atlas.png')+'","h":160,"face":1,"f":'+gf+'}')
-for k in ['zhangfei','zhaoyun','huangzhong','weiyan','foe','boss1','boss2','boss3','boss4','boss5','boss6']:
+for k in ['zhangfei','zhaoyun','huangzhong','weiyan','horse','foe','boss1','boss2','boss3','boss4','boss5','boss6']:
     if not os.path.exists(f'{s}/{k}_atlas.png'):print('missing',k);continue
     fr=open(f'{s}/{k}.json',encoding='utf-8-sig').read();j=json.loads(fr)
     fj=fr[fr.index('"f":')+4:].rstrip();fj=fj[:-1]

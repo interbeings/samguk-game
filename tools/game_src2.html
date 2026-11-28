@@ -35,7 +35,11 @@ const BGS=__BGS__;     // theme: {src, gy(땅이 시작되는 줄)}  — 그림�
 const cv=document.getElementById('cv');
 let ctx=cv.getContext('2d');
 const bgc=document.createElement('canvas');bgc.width=480;bgc.height=270;const bgx=bgc.getContext('2d');
-const W=960, H=540, GY=468, HERO_H=120, FOE_H=94, BOSS_H=138;
+const W=960, H=540, GY=468, HERO_H=120, FOE_H=94, BOSS_H=138, HORSE_H=140, HORSE_T=3600;
+/* 장수 키 — 삼국지연의 기준: 관우 9척, 장비·조운 8척, 황충·위연은 기록이 없어 8척으로 맞춤 (그림마다 머리 위치를 재서 보정) */
+const HSCALE={guan:1,zhangfei:1.03,zhaoyun:.98,huangzhong:.99,weiyan:1.03};
+const HEIGHT={guan:'9척 (약 207cm)',zhangfei:'8척 (약 184cm)',zhaoyun:'8척 (약 184cm)',huangzhong:'8척 (약 184cm)',weiyan:'8척 (약 184cm)'};
+const HH=()=>HERO_H*(HSCALE[HERO.id]||1);
 const FT="'Nanum Myeongjo','Batang','Noto Serif KR',serif";
 const FU="'Malgun Gothic','Apple SD Gothic Neo','Noto Sans KR',sans-serif";
 /* 화면 맞춤 — 휴대폰을 세로로 들고 있으면 게임 화면을 옆으로 눕혀서(가로 모드) 보여줌 */
@@ -460,6 +464,9 @@ const STAGES=ORDER.map((o,i)=>{let S;
     S={name:a[0],year:a[1],place:a[2],sub:a[3],theme:a[4],len,foe:a[5],story:a[6],talk:a[7],waves,
       boss:{name:a[8],set:'d_'+a[9]+'_'+a[10],from:a[9],hue:a[10],minions:i<5?['spear','spear']:i<15?['shield','archer','spear']:['captain','archer','shield']}};}
   S.name='제'+(i+1)+'장 · '+S.name.replace(/^제\d+장 · /,'');
+  const sp0=S.len-W;S.len=W+sp0*2;   // 한 장의 길이를 2배로 — 뒤 절반에 적 무리를 한 번 더
+  S.waves=S.waves.concat(S.waves.map((w,k)=>({at:w.at+sp0,list:w.list.slice(1).concat(w.list.slice(0,1))})));
+  S.horseAt=sp0-260;   // 앞 절반이 끝날 즈음 적토마가 나타난다
   const B=S.boss=Object.assign({},S.boss);   // 30장에 맞춰 보스가 차례로 강해진다
   B.hp=Math.round((260+i*30+(i>=20?(i-20)*20:0))*(i===ORDER.length-1?1.35:1));B.spd=Math.min(2.9,1.6+i*.035);B.aggr=Math.min(1.9,.85+i*.035);
   return S;});
@@ -488,7 +495,7 @@ G.save=readSave();G.tsel=G.save?1:0;
 function saveHi(){if(G.score>G.hi){G.hi=G.score;try{localStorage.setItem('cyw_hi',G.hi);}catch(e){}}}
 
 /* ================= 플레이어 ================= */
-function newPlayer(){return {isPlayer:1,x:220,y:GY,vx:0,vy:0,face:1,hp:MAXHP(),maxhp:MAXHP(),mp:30,st:'idle',t:0,atk:null,step:0,stepT:0,
+function newPlayer(){return {isPlayer:1,horse:0,x:220,y:GY,vx:0,vy:0,face:1,hp:MAXHP(),maxhp:MAXHP(),mp:30,st:'idle',t:0,atk:null,step:0,stepT:0,
   buf:0,spBuf:0,inv:0,hits:new Set(),air:false,airAtk:false,combo:0,comboT:0,deadT:0,w:44,h:112};}
 function startAtk(n){const p=player;p.st='atk';p.atk=n;p.step=0;p.stepT=0;p.buf=0;if(HERO.atk[n].inv)p.inv=Math.max(p.inv,90);if(!p.air)p.vx=0;}
 function stepStart(p,S){
@@ -521,6 +528,12 @@ function updPlayer(){
   if(p.inv>0)p.inv--;
   if(p.comboT>0&&--p.comboT===0)p.combo=0;
   p.mp=Math.min(100,p.mp+.025);
+  if(p.horse>0&&p.st!=='dead'){   // 적토마: 60초 동안 빠르게 달리고, 부딪히는 적을 짓밟는다
+    if(--p.horse===0){horseRun={x:p.x,face:p.face||1,t:0};texts.push({x:p.x,y:p.y-170,s:'적토마가 떠났다',c:'#ffcf8a',life:60});}
+    else if(Math.abs(p.vx)>2&&!p.air)for(const e of enemies){if(e.trT>0){e.trT--;continue;}
+      if(e.dead||e.air||Math.abs(e.x-p.x)>72)continue;e.trT=40;dust(e.x,GY,4);
+      hitEnemy(e,{dmg:10,kx:9,ky:-8,stun:40,brk:1,shake:4},p.vx>0?1:-1);}
+    if(G.t%6===0&&Math.abs(p.vx)>2&&!p.air)dust(p.x-p.face*50,GY,2,'#d8c090');}
   if(p.st==='dead'){phys(p);p.vx*=.92;p.deadT++;return;}
   if(p.spBuf>0)p.spBuf--;
   if(p.st==='hurt'){
@@ -541,7 +554,7 @@ function updPlayer(){
   }
   const mx=(K.right?1:0)-(K.left?1:0);
   if(mx)p.face=mx;
-  p.vx=mx*HERO.spd;
+  p.vx=mx*HERO.spd*(p.horse>0?1.9:1);
   if(P.jump&&!p.air){p.vy=-13.5;p.air=true;SFX.jump();dust(p.x,GY,6);}
   if(p.spBuf>0&&!p.air){
     p.spBuf=0;
@@ -558,6 +571,7 @@ function updPlayer(){
 function hurtPlayer(dmg,dir){
   const p=player;
   if(p.inv>0||p.st==='dead'||G.bossDead)return false;
+  if(p.horse>0)dmg=Math.ceil(dmg*.5);   // 말 위에서는 피해 절반
   p.hp-=dmg;p.inv=55;p.st='hurt';p.t=18;p.vx=dir*5;p.atk=null;p.combo=0;p.comboT=0;
   SFX.hurt();cam.shake=Math.max(cam.shake,6);hitstop=4;
   texts.push({x:p.x,y:p.y-120,s:'-'+dmg,c:'#ff6b5b',life:40});
@@ -592,7 +606,8 @@ function hitEnemy(e,h,dir){
   const p=player;let dmg=Math.round(h.dmg*HERO.pow*WM());
   const front=e.face===-dir;
   if(e.type==='shield'&&front&&!h.brk&&!e.air&&e.stun<=0&&e.st!=='strike'){
-    dmg=Math.max(1,Math.round(dmg*.15));e.hp-=dmg;e.vx=dir*2.5;e.flash=4;
+    dmg=Math.max(1,Math.round(dmg*.5));e.hp-=dmg;   // 방패병 방어력 낮춤 (막아도 피해의 절반은 들어감)
+   e.vx=dir*2.5;e.flash=4;
     SFX.clang();sparks(e.x-dir*10,e.y-60,'#fff6c0',10);hitstop=3;
     texts.push({x:e.x,y:e.y-e.h-10,s:'막힘',c:'#ddd',life:30});
     if(e.hp<=0)kill(e,dir);return;
@@ -772,16 +787,27 @@ function updProjs(){
 function updItems(){
   for(const it of items){
     it.t++;if(it.y<GY){it.vy+=.5;it.y=Math.min(GY,it.y+it.vy);}
+    if(it.k==='horse'){
+      if(Math.abs(it.x-player.x)<60&&player.st!=='dead'&&player.horse<=0&&it.t>30){it.gone=true;player.horse=HORSE_T;SFX.special();flash=.2;
+        texts.push({x:it.x,y:it.y-170,s:'적토마 탑승! 60초',c:'#ffcf8a',life:70});addScore(500);}
+      continue;}
     if(Math.abs(it.x-player.x)<40&&player.y>GY-30&&player.st!=='dead'&&it.t>20){
       it.gone=true;SFX.pickup();
       if(it.k==='bun'){player.hp=Math.min(player.maxhp,player.hp+30);texts.push({x:it.x,y:it.y-60,s:'체력 +30',c:'#8f8',life:45});}
       else{player.mp=Math.min(100,player.mp+50);texts.push({x:it.x,y:it.y-60,s:'기력 +50',c:'#8cf',life:45});}
       addScore(100);
     }
-    if(it.t>900)it.gone=true;
+    if(it.t>900&&it.k!=='horse')it.gone=true;
   }
   items=items.filter(i=>!i.gone);
+  const S=STAGES[G.stage];
+  if(!G.horseGiven&&SETS.horse&&cam.lock===null&&player.x-W*.4>=S.horseAt){G.horseGiven=true;
+    items.push({k:'horse',x:Math.min(cam.x+W-150,player.x+430),y:GY,vy:0,t:0});texts.push({x:player.x+300,y:GY-190,s:'적토마가 나타났다!',c:'#ffcf8a',life:90});}
+  if(horseRun){horseRun.x+=horseRun.face*9;horseRun.t++;if(horseRun.t>120)horseRun=null;}
 }
+let horseRun=null;
+const RIDE_HIP=48,RIDE_CUT=14;
+const HSEAT={'0_0':102,'0_1':115,'0_2':117,'0_3':114,'1_0':120,'1_1':120,'1_3':119};   // 프레임별 안장 높이(그림 기준)
 function sparks(x,y,c,n){for(let i=0;i<n;i++){const a=rnd(0,Math.PI*2),s=rnd(2,8);parts.push({k:'spark',x,y,vx:Math.cos(a)*s,vy:Math.sin(a)*s,life:rnd(10,22),c});}}
 function dust(x,y,n,c='#d8c8a8'){for(let i=0;i<n;i++)parts.push({k:'dust',x:x+rnd(-20,20),y:y-rnd(0,8),vx:rnd(-1.5,1.5),vy:rnd(-1.6,-.3),life:rnd(18,32),max:32,r:rnd(5,10),c});}
 function updParts(){
@@ -797,7 +823,7 @@ function loadStage(){
   player=newPlayer();player.hp=Math.min(player.maxhp,G.carryHP);player.mp=G.carryMP;
   enemies=[];projs=[];parts=[];items=[];texts=[];fxs=[];spawnQ=[];
   cam={x:0,lock:null,shake:0};
-  G.wave=0;G.inWave=false;G.bossOn=false;G.bossDead=false;G.bossDeadT=0;G.stageScore=G.score;G.paused=false;
+  G.wave=0;G.inWave=false;G.bossOn=false;G.horseGiven=false;horseRun=null;G.bossDead=false;G.bossDeadT=0;G.stageScore=G.score;G.paused=false;
   banner={text:S.name,sub:S.sub,t:200};hitstop=0;slowmo=0;flash=0;goArrow=120;
 }
 function startGame(){
@@ -1105,7 +1131,7 @@ function heroFrame(p){
   return A.idle[(G.t/10|0)%A.idle.length];
 }
 function drawPlayer(){
-  const p=player,sx=p.x-cam.x;shadow(sx,p.y,36);
+  const p=player,sx=p.x-cam.x;shadow(sx,p.y,p.horse>0?70:36);
   const fr=heroFrame(p);
   const bob=p.st==='walk'?-Math.abs(Math.sin(G.t*.2))*3:0;
   const blink=p.inv>0&&p.st!=='atk'&&p.st!=='dead'&&(G.t>>2)&1;
@@ -1113,8 +1139,18 @@ function drawPlayer(){
     circle(sx,p.y-60,58+Math.sin(G.t*.5)*8,HERO.col+'2e');ctx.restore();}
   if(G.wl>=3&&p.st==='atk'){ctx.save();ctx.globalCompositeOperation='lighter';circle(sx+p.face*70,p.y-70,40+G.wl*4,WCOL[G.wl]+'26');ctx.restore();}
   if(G.wl>=5&&G.t%5===0)sparks(p.x+p.face*rnd(20,80),p.y-rnd(60,110),WCOL[5],1);
-  spr(HERO.set,fr,sx,p.y+bob,p.face,HERO_H,blink?.35:1);
-  if(p.st==='hurt')spr('w_'+HERO.set,fr,sx,p.y,p.face,HERO_H,.55);
+  if(p.horse>0&&p.st!=='dead'){   // 말 탄 모습: 말을 그리고, 장수는 안장 위로 허리 위만
+    const moving=Math.abs(p.vx)>.5,hf=p.air?'0_1':moving?'0_'+((G.t/5|0)%4):'1_0';
+    const gb=moving&&!p.air?-Math.abs(Math.sin(G.t*.32))*4:0,hy=p.y+gb;
+    if(p.horse<240&&(G.t>>3)&1)ctx.globalAlpha=.6;
+    const seat=HSEAT[hf]*HORSE_H/150,ry=hy-seat+RIDE_HIP;
+    spr('horse',hf,sx,hy,p.face,HORSE_H,blink?.5:1);ctx.globalAlpha=1;
+    ctx.save();ctx.beginPath();ctx.rect(sx-260,0,520,hy-seat+RIDE_CUT);ctx.clip();
+    spr(HERO.set,fr,sx,ry,p.face,HH(),blink?.35:1);
+    if(p.st==='hurt')spr('w_'+HERO.set,fr,sx,ry,p.face,HH(),.55);
+    ctx.restore();return;}
+  spr(HERO.set,fr,sx,p.y+bob,p.face,HH(),blink?.35:1);
+  if(p.st==='hurt')spr('w_'+HERO.set,fr,sx,p.y,p.face,HH(),.55);
 }
 function bossFrame(e){
   if(e.dead)return '2_3';
@@ -1203,10 +1239,14 @@ function render(){
   ctx.save();
   if(cam.shake)ctx.translate(rnd(-1,1)*cam.shake,rnd(-1,1)*cam.shake);
   drawBG(S.theme,cam.x);
-  for(const it of items){const x=it.x-cam.x;if(it.t>760&&(it.t>>2)&1)continue;it.k==='bun'?drawBun(x,it.y):drawWine(x,it.y);}
+  for(const it of items){const x=it.x-cam.x;
+    if(it.k==='horse'){shadow(x,GY,70);spr('horse',(it.t>>5)&1?'1_1':'1_0',x,it.y,-1,HORSE_H);
+      if((G.t>>4)&1)txt('▼ 적토마 — 다가가면 탑승',x,it.y-HORSE_H-18,15,'#ffcf8a','center',FT);continue;}
+    if(it.t>760&&(it.t>>2)&1)continue;it.k==='bun'?drawBun(x,it.y):drawWine(x,it.y);}
+  if(horseRun)spr('horse','0_'+((G.t/4|0)%4),horseRun.x-cam.x,GY,horseRun.face,HORSE_H,Math.max(0,1-horseRun.t/120));
   const sorted=enemies.slice().sort((a,b)=>(b.dead-a.dead)||((a.boss?1:0)-(b.boss?1:0)));
   for(const e of sorted){if(e.boss)drawBoss(e);else drawFoe(e);}
-  for(const f of fxs)if(f.k==='ghost')spr('w_'+HERO.set,f.f,f.x-cam.x,f.y,f.face,HERO_H,.3*(1-f.t/f.life));
+  for(const f of fxs)if(f.k==='ghost')spr('w_'+HERO.set,f.f,f.x-cam.x,f.y,f.face,HH(),.3*(1-f.t/f.life));
   drawPlayer();
   for(const f of fxs){const k=Math.max(0,f.t)/f.life;
     if(f.k==='arc')spr('guan','fxArc',f.x-cam.x,f.y,f.face,95,1-k,'lighter');
@@ -1264,6 +1304,7 @@ function drawHUD(){
   R('rgba(255,255,255,.6)',94+125,56,2,16);
   txt(WEAPON[HERO.id]+' '+'★'.repeat(G.wl),352,42,13,WCOL[G.wl],'left');
   if(p.mp>=50&&(G.t>>4)&1)txt(HERO.spName+' 준비! (X)',352,64,13,'#9ff3ff','left');
+  if(p.horse>0){bar(94,76,250,10,p.horse/HORSE_T,'#ffcf8a','#b8621a','');txt('적토마 '+Math.ceil(p.horse/60)+'초',352,82,13,'#ffcf8a','left');}
   txt(G.score.toLocaleString(),W-20,26,26,'#fff','right');
   txt('최고 '+Math.max(G.hi,G.score).toLocaleString(),W-20,52,13,'#ccc','right');
   txt(STAGES[G.stage].name,W/2,22,15,'#f3e2b8','center',FT);
@@ -1287,7 +1328,7 @@ function drawTitle(){
   drawBG('field',G.t*.6);
   ctx.fillStyle='rgba(12,8,4,.5)';ctx.fillRect(0,0,W,H);
   const lineup=[[1,150,.9],[3,250,.95],[0,360,1.05],[2,465,.95],[4,560,.9]];
-  for(const [i,x,s] of lineup){const h=HEROES[i];shadow(x,GY,40*s);spr(h.set,h.anim.idle[((G.t/12|0)+i)%h.anim.idle.length],x,GY+4,1,150*s);}
+  for(const [i,x,s] of lineup){const h=HEROES[i];shadow(x,GY,40*s);spr(h.set,h.anim.idle[((G.t/12|0)+i)%h.anim.idle.length],x,GY+4,1,150*s*(HSCALE[h.id]||1));}
   goldText('청룡언월전',W/2,118,84);
   txt('오호대장 무쌍  ·  義의 칼날',W/2,186,24,'#f3e2b8','center',FT);
   R('rgba(0,0,0,.5)',650,250,280,150);
@@ -1311,7 +1352,7 @@ function drawSelect(){
     shadow(x+CARD.w/2,GY,0);
     const fr=sel?h.anim.idle[(G.t/10|0)%h.anim.idle.length]:h.anim.idle[0];
     ctx.save();ctx.beginPath();ctx.rect(x,y,CARD.w,CARD.h);ctx.clip();
-    spr(h.set,fr,x+CARD.w/2-8,y+232,1,170,sel?1:.75);ctx.restore();
+    spr(h.set,fr,x+CARD.w/2-8,y+232,1,170*(HSCALE[h.id]||1),sel?1:.75);ctx.restore();
     txt(h.name,x+CARD.w/2,y+256,24,sel?'#ffe7a0':'#ddd','center',FT);
     txt(h.title,x+CARD.w/2,y+282,13,h.col,'center',FU);
   });
@@ -1319,7 +1360,7 @@ function drawSelect(){
   R('rgba(0,0,0,.6)',60,412,840,108);
   txt(h.name+' '+h.zi+'  —  '+h.title,80,432,20,'#ffe7a0','left',FT);
   txt(h.desc,80,462,15,'#eee','left');
-  txt('무기 · '+WEAPON[h.id]+' ('+WDESC[h.id]+')      필살기 · '+SPS[h.id][0].name,80,492,15,'#9ff3ff','left');
+  txt('무기 · '+WEAPON[h.id]+' ('+WDESC[h.id]+')    필살기 · '+SPS[h.id][0].name+'    키 · '+HEIGHT[h.id],80,492,15,'#9ff3ff','left');
   const st=[['체력',h.hp/125],['속도',h.spd/5.2],['힘',h.pow/1.25],['사거리',h.reach/1.15]];
   st.forEach((s,i)=>{const yy=428+i*21;txt(s[0],640,yy+6,13,'#ccc','left');R('#2a2420',700,yy,180,12);R(h.col,700,yy,180*s[1],12);});
   if((G.t>>5)&1)txt('← → 선택   ·   Enter / 공격 결정',W/2,H-8,14,'#ffe7a0');
