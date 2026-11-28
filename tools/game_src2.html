@@ -79,7 +79,7 @@ addEventListener('pointerdown',goLandscape,true);
 /* ================= 입력 ================= */
 const K={}, P={};
 const KEYMAP={ArrowLeft:'left',KeyA:'left',ArrowRight:'right',KeyD:'right',ArrowUp:'jump',KeyW:'jump',Space:'jump',KeyK:'jump',
-  KeyZ:'atk',KeyJ:'atk',KeyX:'sp',KeyL:'sp',Enter:'start',KeyP:'pause',Escape:'pause',KeyM:'mute'};
+  ArrowDown:'down',KeyS:'down',KeyZ:'atk',KeyJ:'atk',KeyX:'sp',KeyL:'sp',Enter:'start',KeyP:'pause',Escape:'pause',KeyM:'mute'};
 function press(k){if(!K[k])P[k]=1;K[k]=1;}
 function release(k){K[k]=0;}
 addEventListener('keydown',e=>{const k=KEYMAP[e.code];if(!k)return;e.preventDefault();audioInit();if(e.repeat)return;press(k);});
@@ -139,6 +139,7 @@ const SFX={
   die(){tone(220,.6,'sawtooth',.18,40);},
   boss(){tone(110,1.1,'sawtooth',.14,104);tone(55,1.1,'sine',.3);drum(0,1);drum(.35,1);drum(.7,1.2);},
   clear(){[523,659,784,1046].forEach((f,i)=>tone(f,.3,'triangle',.18,null,i*.13));},
+  thunder(){noise(.5,.45,900,.6,0,180);tone(70,.5,'sawtooth',.2,30);},
   deny(){tone(180,.1,'square',.1,150);},
   move(){tone(700,.05,'triangle',.12);},
   pick(){tone(523,.1,'triangle',.18);tone(784,.18,'triangle',.18,null,.09);}
@@ -185,7 +186,7 @@ function bkick(t,v,dest){const o=AC.createOscillator(),g=AC.createGain();o.type=
 function pickSong(){
   if(!bgmOn||G.paused)return '';
   const m=G.mode;
-  if(m==='title'||m==='select'||m==='ending'||m==='loading')return 'title';
+  if(m==='title'||m==='select'||m==='ending'||m==='loading'||m==='camp')return 'title';
   if(m==='over')return '';
   return G.bossOn&&!G.bossDead?'boss':'battle';
 }
@@ -229,7 +230,7 @@ function bgmTick(){
 
 /* ================= 스프라이트 ================= */
 const ATL={}, SETOF={};
-const FOE_CLOTH=[[228,182,44],[150,30,40],[64,100,186],[70,72,96],[40,104,112]];   // 적군 옷 색 (황건 / 동탁군 / 원소군 / 조조군 / 조조 수군)
+const FOE_CLOTH=[[228,182,44],[150,30,40],[64,100,186],[70,72,96],[40,104,112],[60,150,110],[214,110,40],[150,110,60]];   // 적군 옷 색 (황건 / 동탁군 / 원소군 / 조조군 / 조조 수군 / 익주군 / 오나라군 / 남만군)
 function recolor(src,fn){
   const c=document.createElement('canvas');c.width=src.width;c.height=src.height;
   const g=c.getContext('2d'),d=g.createImageData(src.width,src.height),s=src.data,o=d.data;
@@ -328,10 +329,56 @@ const HEROES=[
 ];
 let HERO=HEROES[0];
 
+/* ================= 장수별 무기 · 필살기 상점 ================= */
+const WEAPON={guan:'청룡언월도',zhangfei:'장팔사모',zhaoyun:'청강검',huangzhong:'보조궁',weiyan:'대도'};
+const WDESC={guan:'묵직한 언월도 베기',zhangfei:'멀리 닿는 창 찌르기',zhaoyun:'빠른 4연속 검술',huangzhong:'모든 공격이 화살',weiyan:'몰아치는 대도'};
+const WCOL=['','#ffffff','#bfe8ff','#9ff3ff','#ffe066','#ff9a5a'];   // 강화 단계별 무기 빛
+const WCOST=[0,1500,3000,5000,8000],HPCOST=[2000,4000,6000];
+(function(){
+  const H=id=>HEROES.find(h=>h.id===id).atk;
+  const zf=H('zhangfei');   // 장비: 장팔사모 — 길게 찌르기
+  zf.a1={steps:[{f:'0_1',t:5},{f:'1_0',t:15,mv:4,sfx:'swing',hit:{x0:10,x1:255,y0:-125,y1:5,dmg:11,kx:6,ky:0,stun:24}}],next:'a2',cancel:9};
+  zf.a2={steps:[{f:'0_1',t:4},{f:'1_0',t:17,mv:5,sfx:'swing',hit:{x0:10,x1:270,y0:-125,y1:5,dmg:13,kx:8,ky:-4,stun:32}}],next:'a3',cancel:10};
+  const zy=H('zhaoyun');    // 조운: 청강검 — 짧고 빠른 4연격, 마지막에 검기
+  zy.a1={steps:[{f:'0_1',t:3},{f:'1_1',t:11,mv:3,sfx:'swing',fx:'arc',hit:{x0:0,x1:150,y0:-150,y1:5,dmg:8,kx:3,ky:0,stun:20}}],next:'a2',cancel:6};
+  zy.a2={steps:[{f:'1_0',t:11,mv:3,sfx:'swing',hit:{x0:0,x1:160,y0:-125,y1:5,dmg:8,kx:3,ky:0,stun:22}}],next:'a3',cancel:6};
+  zy.a3={steps:[{f:'1_2',t:5},{f:'1_3',t:13,sfx:'swing',fx:'arc',hit:{x0:0,x1:150,y0:-140,y1:10,dmg:11,kx:4,ky:-6,stun:30}}],next:'a4',cancel:7};
+  zy.a4={steps:[{f:'1_1',t:20,mv:5,sfx:'heavy',swave:1,hit:{x0:-10,x1:165,y0:-170,y1:10,dmg:14,kx:9,ky:-8,stun:44,brk:1,shake:8}}]};
+  const hz=H('huangzhong'); // 황충: 활 — 모든 공격이 화살
+  hz.a1={steps:[{f:'1_0',t:6},{f:'1_1',t:12,shoot:'arrow'}],next:'a2',cancel:5};
+  hz.a2={steps:[{f:'1_0',t:5},{f:'1_1',t:12,shoot:'arrow'}],next:'a3',cancel:5};
+  hz.a3={steps:[{f:'1_0',t:10},{f:'1_1',t:22,shoot:'triple'}]};
+  hz.air={steps:[{f:'2_1',t:16,shoot:'arrow'}]};
+})();
+const SPIN=(f1,f2,f3)=>({steps:[{f:f1,t:8},{f:f2,t:42,multi:7,spin:1,sfx:'special',hit:{x0:-190,x1:210,y0:-190,y1:10,dmg:7,kx:3,ky:-4,stun:40,brk:1,shake:4}},
+  {f:f3,t:20,sfx:'heavy',fx:'arc',dust:1,hit:{x0:-40,x1:230,y0:-150,y1:10,dmg:18,kx:11,ky:-8,stun:50,brk:1,shake:12}}],inv:1});
+const SPS={   // 장수마다 필살기 3개 — 첫 번째는 기본, 나머지는 군공 포인트로 구매
+  guan:[{name:'청룡파',atk:HEROES[0].atk.sp},
+    {name:'회전 청룡참',price:3000,atk:SPIN('raiseA','slashB','slashA')},
+    {name:'청룡강림',price:6000,atk:{steps:[{f:'raiseA',t:10},{f:'raiseB',t:46,sky:'bolt',col:'#7fffb0',sfx:'special'}],inv:1}}],
+  zhangfei:[{name:'장판교 일갈',atk:HEROES[1].atk.sp},
+    {name:'사모 난격',price:3000,atk:{steps:[{f:'0_1',t:6},{f:'1_0',t:36,dash:5,multi:6,ghost:1,sfx:'special',hit:{x0:0,x1:250,y0:-130,y1:10,dmg:7,kx:3,ky:0,stun:40,brk:1,shake:3}},
+      {f:'1_3',t:22,sfx:'heavy',dust:1,hit:{x0:0,x1:220,y0:-150,y1:10,dmg:20,kx:12,ky:-9,stun:50,brk:1,shake:12}}],inv:1}},
+    {name:'대지 진동',price:6000,atk:{steps:[{f:'1_2',t:14},{f:'1_3',t:40,sfx:'roar',dust:1,pquake:1,hit:{x0:-130,x1:130,y0:-90,y1:20,dmg:14,kx:6,ky:-10,stun:50,brk:1,shake:16}}],inv:1}}],
+  zhaoyun:[{name:'칠진칠출',atk:HEROES[2].atk.sp},
+    {name:'검기 연참',price:3000,atk:{steps:[{f:'1_2',t:8},{f:'1_1',t:14,swave:1,sfx:'special'},{f:'1_0',t:8},{f:'1_1',t:18,swave:1,sfx:'swing'}],inv:1}},
+    {name:'백룡승천',price:6000,atk:{steps:[{f:'0_1',t:6},{f:'1_2',t:30,multi:6,spin:1,sfx:'special',hit:{x0:-110,x1:180,y0:-260,y1:10,dmg:8,kx:2,ky:-12,stun:50,brk:1,shake:5}},
+      {f:'1_3',t:30,sky:'bolt',col:'#bfe8ff',sfx:'heavy'}],inv:1}}],
+  huangzhong:[{name:'백보천양',atk:HEROES[3].atk.sp},
+    {name:'관통 화살',price:3000,atk:{steps:[{f:'1_0',t:22},{f:'1_1',t:26,shoot:'huge'}],inv:1}},
+    {name:'화살비',price:6000,atk:{steps:[{f:'1_0',t:14},{f:'1_1',t:40,sky:'rain',col:'#ffe9a0'}],inv:1}}],
+  weiyan:[{name:'반골 난무',atk:HEROES[4].atk.sp},
+    {name:'회전 대도',price:3000,atk:SPIN('1_2','1_1','1_3')},
+    {name:'낙뢰 일섬',price:6000,atk:{steps:[{f:'1_2',t:12},{f:'1_3',t:40,sky:'bolt',col:'#ffe46a',sfx:'heavy',dust:1}],inv:1}}]
+};
+function applyLoadout(){const s=SPS[HERO.id][G.eq]||SPS[HERO.id][0];HERO.atk.sp=s.atk;HERO.spName=s.name;}
+const MAXHP=()=>HERO.hp+20*G.hpUp;
+const WM=()=>1+.25*(G.wl-1);
+
 /* ================= 스테이지 ================= */
 /* 장 구성: 삼국지 전쟁 순서 (184 → 219)
    foe: 적군 옷 색 번호(FOE_CLOTH), story: 장 시작 이야기, talk: 보스 등장 대화 [보스 대사, 장수 대사] */
-const STAGES=[
+const BASE_STAGES=[
   {name:'제1장 · 황건적의 난',year:'중평 원년 (184)',place:'탁군',sub:'누런 두건의 난을 평정하라',theme:'field',len:3200,foe:0,
    story:['누런 두건을 두른 황건적이 들불처럼 천하를 뒤덮었다.','도원에서 형제의 의를 맺은 유비·관우·장비는','의용군을 일으켜 탁군의 들판으로 달려간다.'],
    talk:['누런 하늘이 선다! 한나라의 개들은 모두 쓸어버려라!','백성을 괴롭히는 도적아, 이 칼을 받아라!'],
@@ -375,23 +422,73 @@ const STAGES=[
           {at:2100,list:['captain','captain','shield','shield','archer','archer','spear','spear']}],
    boss:{name:'정서장군 하후연',set:'boss6',hp:700,spd:2.3,aggr:1.45,minions:['captain','captain','archer']}}
 ];
-const ENDING=['하후연이 쓰러지자 조조는 한중에서 군을 물렸다.','그해 가을, 유비는 한중왕의 자리에 올랐다.'];
+/* 새로 늘어난 장: [제목, 연도, 장소, 부제, 배경, 적군 옷색, 이야기 3줄, 대화(보스, 장수), 보스 이름, 바탕 보스 그림, 색조] */
+const XS=[
+ ['광종 전투','중평 원년 (184)','광종','황건의 본거지를 쳐라','field',0,['탁군의 황건적은 물리쳤지만 난은 끝나지 않았다.','황건의 우두머리 장각의 아우들이 광종에 모여 있다.','관군과 함께 광종성으로 진군한다.'],['누런 하늘은 무너지지 않는다! 모두 쓸어버려라!','도적의 무리는 오늘로 끝이다!'],'지공장군 장보','boss1',40],
+ ['호로관 전투','초평 원년 (190)','호로관','천하무적에 맞서다','gate',1,['화웅이 쓰러지자 동탁은 직접 대군을 이끌고 호로관으로 나왔다.','그 앞에 붉은 말을 탄 천하제일의 장수가 서 있다.','사람 중에는 여포, 말 중에는 적토라 했다.'],['나 여봉선을 이길 자가 이 세상에 있더냐!','셋이 덤벼서라도 오늘 너를 꺾겠다!'],'비장 여포','boss2',300],
+ ['서주 구원','흥평 원년 (194)','서주','백성을 지켜라','field',3,['아버지의 원수를 갚겠다며 조조가 서주로 쳐들어왔다.','도겸의 구원 요청을 받은 유비는 군사를 이끌고 달려간다.','서주성 밖 들판에 조조군 선봉이 진을 쳤다.'],['한쪽 눈을 잃었어도 너 따위는 충분하다!','죄 없는 백성을 해치는 군대는 용서하지 않는다!'],'맹장 하후돈','boss6',60],
+ ['하비성','건안 3년 (198)','하비','물에 잠긴 성','river',1,['서주를 빼앗은 여포가 하비성에 틀어박혔다.','연합군은 강물을 끌어들여 성을 물에 잠기게 했다.','궁지에 몰린 여포가 마지막으로 성문을 연다.'],['이 여봉선은 아직 끝나지 않았다!','천하무적도 오늘로 끝이다. 각오하라!'],'비장 여포','boss2',300],
+ ['연진 전투','건안 5년 (200)','연진','형제의 원수','river',2,['안량이 쓰러지자 원소는 크게 노했다.','안량과 형제처럼 지내던 맹장 문추가 복수를 다짐하며 강을 건넌다.','연진 나루에 원소군의 깃발이 가득하다.'],['안량의 원수, 여기서 갚아주마!','같은 길을 따라가게 해주겠다!'],'하북 명장 문추','boss3',200],
+ ['오관 돌파','건안 5년 (200)','동령관','다섯 관문을 넘어라','gate',3,['형님 유비가 살아 있다는 소식을 들었다.','두 형수를 모시고 조조의 땅을 떠나는 길,','통행증 없는 일행 앞에 관문 장수들이 칼을 뽑는다.'],['승상의 허락 없이는 한 발짝도 못 지나간다!','길을 막는다면 베고 지나갈 뿐이다.'],'관문 장수 변희','boss1',250],
+ ['고성 재회','건안 5년 (200)','고성','북이 세 번 울리기 전에','field',3,['마침내 고성에서 아우 장비를 다시 만났다.','그러나 뒤를 쫓아온 조조군 장수 채양이 북을 울린다.','북이 세 번 울리기 전에 결판을 내야 한다!'],['조카의 원수를 갚으러 왔다!','북소리가 끝나기 전에 끝내주마!'],'노장 채양','boss3',100],
+ ['박망파','건안 7년 (202)','박망','불로 맞서라','field',3,['형주의 유표에게 몸을 의탁한 유비,','조조의 장수 하후돈이 대군을 이끌고 박망으로 밀려온다.','갈대밭에 불을 놓아 적을 맞이할 때다!'],['매복 따위 두렵지 않다! 전군 돌격하라!','이 불길 속에서 길을 잃게 될 것이다!'],'맹장 하후돈','boss6',60],
+ ['신야 공방','건안 13년 (208)','신야','백성이 피할 시간을 벌어라','gate',3,['조조가 형주를 삼키려 대군을 일으켰다.','작은 성 신야로는 막을 수 없다.','백성들이 피할 시간을 벌기 위해 성문 앞을 지킨다.'],['신야 같은 작은 성은 단숨에 짓밟아주마!','백성이 모두 떠날 때까지 한 놈도 못 지나간다!'],'대장 조인','boss5',200],
+ ['화용도','건안 13년 (208) 겨울','화용도','달아나는 조조를 막아라','mountain',3,['적벽에서 크게 진 조조가 좁은 산길로 달아난다.','진흙길 끝, 화용도에 매복이 기다린다.','조조 곁에는 마지막까지 남은 호위 장수가 있다.'],['승상께서 지나가실 길이다. 비켜라!','이 길이 너희의 마지막 길이다!'],'호위장 장료','boss4',120],
+ ['남군 공략','건안 14년 (209)','남군','강릉성을 손에 넣어라','gate',3,['조조는 북으로 돌아가고 조인이 남군을 지킨다.','오나라 주유와 남군을 두고 다투는 사이,','성문이 열리며 조인의 철벽 부대가 나온다.'],['이 성은 절대 내줄 수 없다!','철벽이라도 오늘 무너뜨리겠다!'],'대장 조인','boss5',200],
+ ['장사 평정','건안 14년 (209)','장사','남쪽 고을을 평정하라','field',5,['형주 남쪽 네 고을을 평정하러 나섰다.','장사 태수 한현은 끝까지 항복을 거부한다.','성문 앞에 한현의 장수가 진을 쳤다.'],['장사에도 장수가 있다는 것을 보여주마!','항복하면 목숨만은 살려주겠다!'],'장사 장수 양령','boss1',150],
+ ['낙봉파','건안 19년 (214)','낙봉파','숲속의 화살을 조심하라','mountain',5,['익주를 얻기 위해 촉으로 들어갔다.','좁은 산길 낙봉파, 숲속에 무수한 화살이 숨어 있다.','익주의 명장 장임이 길을 막았다.'],['봉황은 이 고개에서 떨어지리라!','숨어서 쏘는 화살로는 우리를 막지 못한다!'],'익주 명장 장임','boss6',140],
+ ['가맹관','건안 19년 (214)','가맹관','관문을 지켜라','gate',5,['한중의 장로가 가맹관을 노리고 군을 보냈다.','관문이 무너지면 촉으로 가는 길이 끊긴다.','장로군의 장수가 관문 아래에서 소리친다.'],['오두미도의 힘을 보여주마!','이 관문은 한 발짝도 내주지 않는다!'],'장로군 장수 양앙','boss2',210],
+ ['성도 입성','건안 19년 (214)','성도','익주를 평정하라','river',5,['마침내 익주의 중심 성도가 눈앞이다.','유장의 장수들이 강을 등지고 마지막 방어선을 쳤다.','이 싸움에 촉의 앞날이 걸렸다.'],['강물을 터뜨려 너희를 쓸어버리겠다!','성도의 백성을 위해서라도 오늘 끝낸다!'],'익주 장수 냉포','boss3',160],
+ ['한수 전투','건안 24년 (219)','한수','빈 영채의 계략','river',3,['하후연을 잃은 조조가 직접 한중으로 왔다.','한수 강가에서 조조군과 촉군이 마주 섰다.','영채 문을 활짝 열어둔 채 적을 기다린다.'],['영채가 비어 있다니, 무슨 꾀냐!','들어오너라, 마음껏 상대해주마!'],'명장 서황','boss4',30],
+ ['양평관','건안 24년 (219)','양평관','보급로를 끊어라','gate',3,['한중을 지키는 마지막 관문, 양평관.','이곳을 무너뜨리면 조조군의 군량이 끊긴다.','조홍이 관문 앞에서 최후의 결전을 준비한다.'],['형님 조조를 위해 여기서 너를 막는다!','관문째로 무너뜨려주마!'],'장군 조홍','boss5',320],
+ ['번성 수공','건안 24년 (219)','번성','물로 성을 덮어라','river',3,['한수가 크게 불어 조조의 일곱 군대가 물에 잠겼다.','그러나 관을 메고 나온 장수 방덕은 물러서지 않는다.','물 위의 결전이 시작된다!'],['오늘 너 아니면 내가 이 관에 들어간다!','그 각오, 칼로 받아주겠다!'],'용장 방덕','boss2',30],
+ ['맥성','건안 24년 (219) 겨울','맥성','배신의 겨울','field',6,['동맹이던 오나라가 등 뒤에서 형주를 빼앗았다.','고립된 군사들은 작은 성 맥성으로 몰렸다.','눈발 속에 여몽의 군대가 성을 에워싼다.'],['형주는 이제 오나라의 것이다!','의리를 저버린 자들에게 칼을 보여주마!'],'오나라 도독 여몽','boss3',330],
+ ['이릉 대전','장무 2년 (222)','이릉','칠백 리 영채','redcliff',6,['아우의 원수를 갚기 위해 촉의 대군이 동쪽으로 나아갔다.','칠백 리에 걸친 영채, 그러나 한여름 불볕이 위험하다.','젊은 서생 육손이 불화살을 준비했다.'],['화공은 서생의 무기요. 모두 불타라!','불길을 뚫고서라도 끝까지 간다!'],'오나라 대도독 육손','boss5',30],
+ ['남만 정벌','건흥 3년 (225)','남중','남쪽의 왕을 붙잡아라','field',7,['남쪽 땅에서 맹획이 반란을 일으켰다.','제갈량은 그를 일곱 번 잡고 일곱 번 놓아주기로 했다.','밀림 너머 맹획의 군대가 북을 울린다.'],['몇 번을 붙잡혀도 다시 일어서리라!','이번에야말로 마음까지 굴복시키겠다!'],'남만왕 맹획','boss1',90],
+ ['독룡동','건흥 3년 (225)','독룡동','독 안개를 뚫어라','mountain',7,['독 안개가 자욱한 계곡, 독룡동.','맹획의 아내 축융부인이 비수를 들고 앞을 막는다.','불의 신의 후예라 불리는 여장부다.'],['불의 신의 후예를 얕보지 마라!','안개도 칼날도 우리를 막지 못한다!'],'축융부인','boss4',300],
+ ['가정','건흥 6년 (228)','가정','북벌의 갈림길','mountain',3,['드디어 위나라를 치는 북벌이 시작되었다.','군량길의 요충지 가정을 지켜야 한다.','위나라 명장 장합이 산 아래를 에워쌌다.'],['산 위에 진을 치다니, 어리석구나!','이 산은 우리가 지킨다!'],'위나라 명장 장합','boss6',180],
+ ['오장원','건흥 12년 (234)','오장원','마지막 결전','gate',3,['다섯 번째 북벌, 오장원에 큰 별이 흔들린다.','위나라 대도독 사마의가 마침내 직접 나섰다.','천하의 운명을 건 마지막 싸움이 시작된다.'],['천하의 끝은 이 사마중달이 정한다!','의(義)의 칼로 이 난세를 끝내겠다!'],'위나라 대도독 사마의','boss5',260]];
+const ORDER=['b0','x0','b1','x1','x2','x3','b2','x4','x5','x6','x7','x8','b3','b4','x9','x10','x11','x12','x13','x14','b5','x15','x16','x17','x18','x19','x20','x21','x22','x23'];
+const STAGES=ORDER.map((o,i)=>{let S;
+  if(o[0]==='b')S=Object.assign({},BASE_STAGES[+o.slice(1)]);
+  else{const a=XS[+o.slice(1)],len=Math.min(4300,3200+i*40),span=len-W;
+    const pool=['spear','spear','archer','shield'];if(i>=3)pool.push('captain');if(i>=15)pool.push('captain','archer');
+    const nw=i>=15?4:3,waves=[];
+    for(let k=0;k<nw;k++){const n=Math.min(8,4+Math.floor(i/6)+(k>=1?1:0)),list=[];
+      for(let j=0;j<n;j++)list.push(pool[Math.floor(hash(i*97+k*13+j)*pool.length)]);
+      waves.push({at:k===0?340:Math.round(340+(span-500)*k/(nw-1)),list});}
+    S={name:a[0],year:a[1],place:a[2],sub:a[3],theme:a[4],len,foe:a[5],story:a[6],talk:a[7],waves,
+      boss:{name:a[8],set:'d_'+a[9]+'_'+a[10],from:a[9],hue:a[10],minions:i<5?['spear','spear']:i<15?['shield','archer','spear']:['captain','archer','shield']}};}
+  S.name='제'+(i+1)+'장 · '+S.name.replace(/^제\d+장 · /,'');
+  const B=S.boss=Object.assign({},S.boss);   // 30장에 맞춰 보스가 차례로 강해진다
+  B.hp=Math.round((260+i*30+(i>=20?(i-20)*20:0))*(i===ORDER.length-1?1.35:1));B.spd=Math.min(2.9,1.6+i*.035);B.aggr=Math.min(1.9,.85+i*.035);
+  return S;});
+const ENDING=['사마의가 물러나고 오장원에 고요가 찾아왔다.','서른 번의 싸움 끝에 의(義)의 이름은 천하에 남았다.'];
 // 아직 전용 그림이 없는 보스는 기존 보스 그림의 색을 바꿔 임시로 쓴다 (전용 그림이 SETS에 들어오면 자동으로 그쪽을 쓴다)
 const DERIVED={boss4:{from:'boss3',hue:150},boss5:{from:'boss2',hue:95},boss6:{from:'boss1',hue:200}};
+STAGES.forEach(S=>{if(S.boss.from)DERIVED[S.boss.set]={from:S.boss.from,hue:S.boss.hue};});   // 전용 그림이 없는 보스는 색을 바꿔 쓴다
 
 /* ================= 상태 ================= */
 const G={mode:'loading',stage:0,score:0,hi:+(localStorage.getItem('cyw_hi')||0),t:0,ct:0,paused:false,
-  sel:Math.max(0,HEROES.findIndex(h=>h.id===localStorage.getItem('cyw_hero')))};
+  sel:Math.max(0,HEROES.findIndex(h=>h.id===localStorage.getItem('cyw_hero'))),
+  pts:0,wl:1,own:[0],eq:0,hpUp:0,csel:0,cmsg:'',cmsgT:0,tsel:0,save:null};
 let cam={x:0,lock:null,shake:0};
 let player=null,enemies=[],projs=[],parts=[],items=[],texts=[],fxs=[],spawnQ=[],banner=null;
 let hitstop=0,slowmo=0,flash=0,goArrow=0;
 const rnd=(a,b)=>a+Math.random()*(b-a);
 function hash(n){const s=Math.sin(n*127.1+311.7)*43758.5453;return s-Math.floor(s);}
 function addScore(n){G.score+=Math.round(n);}
+/* 진행 저장 (군영에 들어갈 때·물건을 살 때 자동 저장) */
+const SAVE_KEY='cyw_save';
+function saveGame(){const d={hero:HERO.id,stage:G.stage,score:G.score,pts:G.pts,wl:G.wl,own:G.own.slice(),eq:G.eq,hpUp:G.hpUp,carryHP:G.carryHP,carryMP:G.carryMP};
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify(d));}catch(e){}G.save=d;}
+function readSave(){try{const d=JSON.parse(localStorage.getItem(SAVE_KEY)||'null');return d&&d.stage>0&&d.stage<STAGES.length&&HEROES.some(h=>h.id===d.hero)?d:null;}catch(e){return null;}}
+function clearSave(){try{localStorage.removeItem(SAVE_KEY);}catch(e){}G.save=null;}
+G.save=readSave();G.tsel=G.save?1:0;
 function saveHi(){if(G.score>G.hi){G.hi=G.score;try{localStorage.setItem('cyw_hi',G.hi);}catch(e){}}}
 
 /* ================= 플레이어 ================= */
-function newPlayer(){return {isPlayer:1,x:220,y:GY,vx:0,vy:0,face:1,hp:HERO.hp,maxhp:HERO.hp,mp:30,st:'idle',t:0,atk:null,step:0,stepT:0,
+function newPlayer(){return {isPlayer:1,x:220,y:GY,vx:0,vy:0,face:1,hp:MAXHP(),maxhp:MAXHP(),mp:30,st:'idle',t:0,atk:null,step:0,stepT:0,
   buf:0,spBuf:0,inv:0,hits:new Set(),air:false,airAtk:false,combo:0,comboT:0,deadT:0,w:44,h:112};}
 function startAtk(n){const p=player;p.st='atk';p.atk=n;p.step=0;p.stepT=0;p.buf=0;if(HERO.atk[n].inv)p.inv=Math.max(p.inv,90);if(!p.air)p.vx=0;}
 function stepStart(p,S){
@@ -401,9 +498,20 @@ function stepStart(p,S){
   if(S.dust)dust(p.x+p.face*70,GY,8);
   if(S.fx==='arc')fxs.push({k:'arc',x:p.x+p.face*95,y:p.y-10,face:p.face,t:0,life:16});
   if(S.wave){flash=.55;cam.shake=12;projs.push({k:'cres',from:'p',x:p.x+p.face*60,y:p.y-10,vx:p.face*12,life:70,hit:new Set(),face:p.face});}
-  if(S.shoot==='arrow'){SFX.bow();projs.push({k:'parrow',from:'p',x:p.x+p.face*60,y:p.y-78,vx:p.face*15,vy:0,life:70,hit:new Set(),face:p.face,dmg:16,pierce:2});}
+  const pr=1+(G.wl>=4?2:0);
+  if(S.shoot==='arrow'){SFX.bow();projs.push({k:'parrow',from:'p',x:p.x+p.face*60,y:p.y-78,vx:p.face*15,vy:0,life:70,hit:new Set(),face:p.face,dmg:10,pierce:pr});}
+  if(S.shoot==='triple'){SFX.bow();for(const dy of[-100,-78,-56])projs.push({k:'parrow',from:'p',x:p.x+p.face*60,y:p.y+dy,vx:p.face*15,vy:0,life:70,hit:new Set(),face:p.face,dmg:9,pierce:pr});}
+  if(S.shoot==='huge'){SFX.bow();flash=.3;cam.shake=8;projs.push({k:'parrow',from:'p',x:p.x+p.face*70,y:p.y-74,vx:p.face*19,vy:0,life:80,hit:new Set(),face:p.face,dmg:34,pierce:99,huge:1});}
+  if(S.swave){flash=Math.max(flash,.15);projs.push({k:'scres',from:'p',x:p.x+p.face*50,y:p.y-20,vx:p.face*13,life:42,hit:new Set(),face:p.face});}
+  if(S.pquake){for(const d of[-1,1])projs.push({k:'pquake',from:'p',x:p.x+d*40,y:GY,vx:d*9,life:75,hit:new Set(),face:d});}
+  if(S.spin){fxs.push({k:'arc',x:p.x+p.face*95,y:p.y-10,face:p.face,t:0,life:16});fxs.push({k:'arc',x:p.x-p.face*95,y:p.y-10,face:-p.face,t:0,life:16});}
+  if(S.sky){SFX.special();flash=.25;let i=0;
+    for(const e of enemies){if(e.dead||e.x<cam.x-20||e.x>cam.x+W+20)continue;const d=12+i*7;
+      projs.push({k:'sky',from:'p',kind:S.sky,col:S.col,x:e.x,y:GY,vx:0,delay:d,life:d+24,dmg:26,hit:new Set()});i++;}
+    for(let j=0;j<3;j++){const d=16+j*9+i*3;projs.push({k:'sky',from:'p',kind:S.sky,col:S.col,x:cam.x+rnd(80,W-80),y:GY,vx:0,delay:d,life:d+24,dmg:26,hit:new Set()});}}
+  if(S.hit&&G.wl>=3)sparks(p.x+p.face*100,p.y-80,WCOL[G.wl],3+G.wl);
   if(S.shoot==='volley'){SFX.bow();flash=.15;
-    for(let i=0;i<5;i++)projs.push({k:'parrow',from:'p',x:p.x+p.face*(50+i*6),y:p.y-40-i*17,vx:p.face*rnd(14,17),vy:0,life:75,hit:new Set(),face:p.face,dmg:9,pierce:4,big:1});}
+    for(let i=0;i<5;i++)projs.push({k:'parrow',from:'p',x:p.x+p.face*(50+i*6),y:p.y-40-i*17,vx:p.face*rnd(14,17),vy:0,life:75,hit:new Set(),face:p.face,dmg:9,pierce:4+pr,big:1});}
   if(S.roar){flash=.5;cam.shake=18;fxs.push({k:'ring',x:p.x,y:p.y-60,t:0,life:34});fxs.push({k:'ring',x:p.x,y:p.y-60,t:-8,life:34});
     texts.push({x:p.x,y:p.y-160,s:'게 섰거라!',c:'#fff',life:60,big:1});
     for(const e of enemies)if(!e.dead&&Math.abs(e.x-p.x)<W){e.stun=Math.max(e.stun,e.boss?25:70);e.st='hurt';if(e.boss)e.move=null;}}
@@ -423,7 +531,7 @@ function updPlayer(){
     const A=HERO.atk[p.atk],S=A.steps[p.step];
     if(p.stepT===0)stepStart(p,S);
     if(S.dash){p.vx=S.dash*p.face;if(S.ghost&&G.t%3===0)fxs.push({k:'ghost',x:p.x,y:p.y,face:p.face,f:S.f,t:0,life:14});}
-    if(S.hit){if(S.multi){if(p.stepT>0&&p.stepT%S.multi===0)p.hits=new Set();doHits(p,S.hit);}else if(p.stepT<7)doHits(p,S.hit);}
+    if(S.hit){if(S.multi){if(p.stepT>0&&p.stepT%S.multi===0){p.hits=new Set();if(S.spin){p.face*=-1;SFX.swing();fxs.push({k:'arc',x:p.x+p.face*95,y:p.y-10,face:p.face,t:0,life:14});}}doHits(p,S.hit);}else if(p.stepT<7)doHits(p,S.hit);}
     p.stepT++;if(!p.air&&!S.dash)p.vx*=.84;
     if(A.next&&p.step===A.steps.length-1&&p.stepT>=A.cancel&&p.buf>0){startAtk(A.next);}
     else if(p.stepT>=S.t){p.step++;p.stepT=0;if(S.dash)p.vx=0;if(p.step>=A.steps.length){p.st=p.air?'jump':'idle';p.atk=null;}}
@@ -481,7 +589,7 @@ function doHits(p,h){
   }
 }
 function hitEnemy(e,h,dir){
-  const p=player;let dmg=Math.round(h.dmg*HERO.pow);
+  const p=player;let dmg=Math.round(h.dmg*HERO.pow*WM());
   const front=e.face===-dir;
   if(e.type==='shield'&&front&&!h.brk&&!e.air&&e.stun<=0&&e.st!=='strike'){
     dmg=Math.max(1,Math.round(dmg*.15));e.hp-=dmg;e.vx=dir*2.5;e.flash=4;
@@ -509,6 +617,7 @@ function hitEnemy(e,h,dir){
 function kill(e,dir){
   e.dead=true;e.deadT=0;e.vy=-7;e.air=true;e.vx=dir*4;e.hp=0;
   addScore(e.boss?5000:e.type==='captain'?800:300);
+  const gp=e.boss?1000:e.type==='captain'?80:20;G.pts+=gp;if(gp>=80)texts.push({x:e.x,y:e.y-e.h-40,s:'군공 +'+gp+'P',c:'#9ff3ff',life:50});
   if(!e.boss&&(e.type==='captain'||Math.random()<.13))
     items.push({k:Math.random()<.6?'bun':'wine',x:e.x,y:e.y-40,vy:-6,t:0});
   if(e.boss){
@@ -527,9 +636,9 @@ const ETYPES={
   captain:{hp:110,w:56,h:116,spd:1.25,reach:100,dmg:12,row:3,heavy:1}
 };
 function newEnemy(type,x){
-  const b=ETYPES[type];
+  const b=ETYPES[type],hp=Math.round(b.hp*(1+G.stage*.05));   // 뒤 장으로 갈수록 적이 강해진다
   return Object.assign({type,x,y:GY,vx:0,vy:0,face:x<player.x?1:-1,max:b.hp,st:'walk',t:0,cd:rnd(50,110),
-    stun:0,flash:0,air:false,dead:false,deadT:0,anim:rnd(0,20),struck:false,relT:0},b);
+    stun:0,flash:0,air:false,dead:false,deadT:0,anim:rnd(0,20),struck:false,relT:0},b,{hp,max:hp,dmg:Math.round(b.dmg*(1+G.stage*.025))});
 }
 function newBoss(B,x){
   return {boss:1,type:'boss',name:B.name,set:B.set,x,y:GY,vx:0,vy:0,face:-1,hp:B.hp,max:B.hp,spd:B.spd,aggr:B.aggr,
@@ -541,7 +650,7 @@ function enemyHitPlayer(e,x0,x1,y0,y1,dmg){
   const p=player,[a,b]=hbox(e,x0,x1);
   if(p.x+20<a||p.x-20>b)return false;
   if(p.y<e.y+y0||p.y-p.h>e.y+y1)return false;
-  return hurtPlayer(dmg,e.face);
+  return hurtPlayer(e.boss?Math.round(dmg*(1+G.stage*.03)):dmg,e.face);
 }
 function updEnemy(e){
   e.anim++;if(e.flash>0)e.flash--;if(e.relT>0)e.relT--;
@@ -634,15 +743,26 @@ function updProjs(){
     if(q.k==='arrow'){if(Math.abs(q.x-player.x)<20&&q.y>player.y-player.h&&q.y<player.y){if(hurtPlayer(6,Math.sign(q.vx)))q.gone=true;}}
     else if(q.k==='quake'){
       if(G.t%3===0)dust(q.x,GY,2,'#c9b08a');
-      if(Math.abs(q.x-player.x)<30&&!player.air){if(hurtPlayer(11,q.face))q.gone=true;}
+      if(Math.abs(q.x-player.x)<30&&!player.air){if(hurtPlayer(Math.round(11*(1+G.stage*.03)),q.face))q.gone=true;}
     }else if(q.k==='cres'||q.k==='parrow'){
       const rad=q.k==='cres'?70:26;
       for(const e of enemies){if(e.dead||q.hit.has(e))continue;
-        if(Math.abs(e.x-q.x)<rad&&(q.k==='cres'||(q.y>e.y-e.h&&q.y<e.y+10))){q.hit.add(e);
+        if(Math.abs(e.x-q.x)<rad&&(q.k==='cres'||q.huge||(q.y>e.y-e.h&&q.y<e.y+10))){q.hit.add(e);
           if(q.k==='cres')hitEnemy(e,{dmg:30,kx:8,ky:-10,stun:50,brk:1,shake:8},q.face);
           else{hitEnemy(e,{dmg:q.dmg,kx:4,ky:q.big?-5:0,stun:28,brk:q.big?1:0,shake:3},q.face);if(--q.pierce<=0){q.gone=true;break;}}}}
       for(const a of projs)if(a.from==='e'&&a.k==='arrow'&&Math.abs(a.x-q.x)<40&&Math.abs(a.y-q.y)<(q.k==='cres'?150:20))a.gone=true;
       if(q.k==='cres'&&G.t%2===0)sparks(q.x-q.face*30,GY-rnd(10,140),'#bff8e0',1);
+    }else if(q.k==='scres'){
+      for(const e of enemies){if(e.dead||q.hit.has(e))continue;if(Math.abs(e.x-q.x)<60){q.hit.add(e);hitEnemy(e,{dmg:18,kx:6,ky:-7,stun:44,brk:1,shake:5},q.face);}}
+      for(const a of projs)if(a.from==='e'&&a.k==='arrow'&&Math.abs(a.x-q.x)<40&&Math.abs(a.y-q.y)<130)a.gone=true;
+      if(G.t%2===0)sparks(q.x-q.face*20,GY-rnd(20,140),'#bfe8ff',1);
+    }else if(q.k==='pquake'){
+      if(G.t%2===0)dust(q.x,GY,2,'#f0d08a');
+      for(const e of enemies){if(e.dead||e.air||q.hit.has(e))continue;if(Math.abs(e.x-q.x)<40){q.hit.add(e);hitEnemy(e,{dmg:16,kx:5,ky:-9,stun:45,brk:1,shake:5},q.face);}}
+    }else if(q.k==='sky'){
+      if(q.delay>0&&--q.delay===0){flash=Math.max(flash,.12);cam.shake=Math.max(cam.shake,5);if(q.kind==='rain')SFX.arrow();else SFX.thunder();
+        for(const e of enemies){if(e.dead||q.hit.has(e))continue;if(Math.abs(e.x-q.x)<75){q.hit.add(e);hitEnemy(e,{dmg:q.dmg,kx:3,ky:-9,stun:50,brk:1,shake:5},e.x>=q.x?1:-1);}}
+        sparks(q.x,GY-20,q.col,10);}
     }
     if(q.x<cam.x-200||q.x>cam.x+W+200)q.gone=true;
     if(q.life<=0)q.gone=true;
@@ -682,14 +802,45 @@ function loadStage(){
 }
 function startGame(){
   HERO=HEROES[G.sel];try{localStorage.setItem('cyw_hero',HERO.id);}catch(e){}
-  G.score=0;G.stage=0;G.carryHP=HERO.hp;G.carryMP=30;loadStage();G.mode='story';G.ct=0;bgmOn=true;
+  G.pts=0;G.wl=1;G.own=[0];G.eq=0;G.hpUp=0;applyLoadout();clearSave();
+  G.score=0;G.stage=0;G.carryHP=MAXHP();G.carryMP=30;loadStage();G.mode='story';G.ct=0;bgmOn=true;
 }
-function retryStage(){G.score=G.stageScore;G.carryHP=HERO.hp;G.carryMP=30;loadStage();G.mode='play';}
-function stageClear(){G.mode='clear';G.ct=0;G.bonus=Math.round(player.hp)*30;G.score+=G.bonus;SFX.clear();saveHi();}
+function retryStage(){G.score=G.stageScore;G.carryHP=MAXHP();G.carryMP=30;loadStage();G.mode='play';}
+function stageClear(){G.mode='clear';G.ct=0;G.bonus=Math.round(player.hp)*30;G.score+=G.bonus;G.pts+=1500;SFX.clear();saveHi();}
 function nextStage(){
-  G.carryHP=Math.min(player.maxhp,player.hp+HERO.hp*.5);G.carryMP=player.mp;G.stage++;
-  if(G.stage>=STAGES.length){G.mode='ending';G.ct=0;saveHi();return;}
-  loadStage();G.mode='story';G.ct=0;
+  G.carryHP=Math.min(player.maxhp,player.hp+MAXHP()*.5);G.carryMP=player.mp;G.stage++;
+  if(G.stage>=STAGES.length){G.mode='ending';G.ct=0;saveHi();clearSave();return;}
+  G.mode='camp';G.ct=0;G.csel=0;G.cmsg='';G.cmsgT=0;saveGame();   // 장 사이에 군영(상점)에 들른다
+}
+function leaveCamp(){saveGame();applyLoadout();loadStage();G.mode='story';G.ct=0;}
+function continueGame(d){
+  G.sel=Math.max(0,HEROES.findIndex(h=>h.id===d.hero));HERO=HEROES[G.sel];
+  Object.assign(G,{score:d.score,stage:d.stage,pts:d.pts,wl:d.wl,own:d.own.slice(),eq:d.eq,hpUp:d.hpUp,carryHP:d.carryHP,carryMP:d.carryMP});
+  applyLoadout();bgmOn=true;G.mode='camp';G.ct=0;G.csel=0;G.cmsg='';G.cmsgT=0;
+}
+/* ---- 군영: 무기 강화 · 필살기 구매 ---- */
+const CAMP_Y=112,CAMP_H=52;
+function campRows(){
+  const r=[],sp=SPS[HERO.id],full=G.carryHP>=MAXHP();
+  r.push({t:'무기 강화 · '+WEAPON[HERO.id]+'  '+'★'.repeat(G.wl)+'☆'.repeat(5-G.wl),s:G.wl<5?'공격력 +25%  ·  '+WCOST[G.wl]+'P':'최고 단계',c:G.wl<5?WCOST[G.wl]:-1,
+    go(){G.wl++;return WEAPON[HERO.id]+' '+G.wl+'단계 강화 완료!';}});
+  sp.forEach((x,i)=>{const own=G.own.includes(i),eq=G.eq===i;
+    r.push({t:'필살기 · '+x.name,s:eq?'장착 중':own?'보유 — 눌러서 장착':x.price+'P',c:eq?-2:own?0:x.price,own,eq,
+      go(){if(!own)G.own.push(i);G.eq=i;applyLoadout();return x.name+(own?' 장착!':' 습득! 바로 장착했다');}});});
+  r.push({t:'체력 강화 · 최대 체력 +20',s:G.hpUp<3?HPCOST[G.hpUp]+'P  ('+G.hpUp+'/3)':'최고 단계',c:G.hpUp<3?HPCOST[G.hpUp]:-1,
+    go(){G.hpUp++;G.carryHP+=20;return '최대 체력 '+MAXHP()+'!';}});
+  r.push({t:'군량 보급 · 체력 가득 회복',s:full?'이미 가득':'500P',c:full?-3:500,go(){G.carryHP=MAXHP();return '체력이 가득 찼다!';}});
+  r.push({t:'▶ 출진 — '+STAGES[G.stage].name,s:(G.stage+1)+' / '+STAGES.length,exit:1});
+  return r;
+}
+function campBuy(o){
+  if(o.exit){SFX.pick();leaveCamp();return;}
+  if(o.c===-2)G.cmsg='이미 장착 중이다';
+  else if(o.c===-3)G.cmsg='체력이 이미 가득하다';
+  else if(o.c<0){G.cmsg='더 이상 올릴 수 없다';SFX.deny();}
+  else if(G.pts<o.c){G.cmsg='군공 포인트가 모자란다';SFX.deny();}
+  else{G.pts-=o.c;G.cmsg=o.go();SFX.pickup();saveGame();}
+  G.cmsgT=150;
 }
 function queueSpawns(list){list.forEach((type,i)=>spawnQ.push({type,side:i%2?-1:1,delay:i===0?20:rnd(35,70)}));}
 function spawnTick(){
@@ -744,7 +895,22 @@ function tick(){
   G.t++;bgmTick();
   if(P.mute)muted=!muted;
   const tap=tapPos;tapPos=null;
-  if(G.mode==='title'){if(P.start||P.atk){G.mode='select';G.ct=0;SFX.pick();}return;}
+  if(G.mode==='title'){
+    const go=()=>{SFX.pick();if(G.tsel===1&&G.save)continueGame(G.save);else{G.mode='select';G.ct=0;}};
+    if(G.save){
+      if(P.left||P.right){G.tsel=G.tsel?0:1;SFX.move();}
+      if(tap){for(let i=0;i<2;i++){const x=TBTN_X[i];if(tap.x>x&&tap.x<x+TBTN_W&&tap.y>TBTN_Y&&tap.y<TBTN_Y+44){G.tsel=i;go();return;}}}
+      if(P.start||P.atk)go();
+    }else if(P.start||P.atk){G.mode='select';G.ct=0;SFX.pick();}
+    return;}
+  if(G.mode==='camp'){
+    G.ct++;if(G.cmsgT>0)G.cmsgT--;const rows=campRows();
+    if(tap){for(let i=0;i<rows.length;i++){const y=CAMP_Y+i*CAMP_H;
+      if(tap.x>330&&tap.x<920&&tap.y>y&&tap.y<y+CAMP_H-8){if(G.csel===i)campBuy(rows[i]);else{G.csel=i;SFX.move();}return;}}return;}
+    if(P.jump||P.left){G.csel=(G.csel+rows.length-1)%rows.length;SFX.move();}
+    if(P.down||P.right){G.csel=(G.csel+1)%rows.length;SFX.move();}
+    if(G.ct>15&&(P.atk||P.start))campBuy(rows[G.csel]);
+    return;}
   if(G.mode==='select'){
     G.ct++;
     if(P.left){G.sel=(G.sel+HEROES.length-1)%HEROES.length;SFX.move();}
@@ -945,6 +1111,8 @@ function drawPlayer(){
   const blink=p.inv>0&&p.st!=='atk'&&p.st!=='dead'&&(G.t>>2)&1;
   if(p.atk==='sp'){ctx.save();ctx.globalCompositeOperation='lighter';
     circle(sx,p.y-60,58+Math.sin(G.t*.5)*8,HERO.col+'2e');ctx.restore();}
+  if(G.wl>=3&&p.st==='atk'){ctx.save();ctx.globalCompositeOperation='lighter';circle(sx+p.face*70,p.y-70,40+G.wl*4,WCOL[G.wl]+'26');ctx.restore();}
+  if(G.wl>=5&&G.t%5===0)sparks(p.x+p.face*rnd(20,80),p.y-rnd(60,110),WCOL[5],1);
   spr(HERO.set,fr,sx,p.y+bob,p.face,HERO_H,blink?.35:1);
   if(p.st==='hurt')spr('w_'+HERO.set,fr,sx,p.y,p.face,HERO_H,.55);
 }
@@ -998,11 +1166,12 @@ function drawWine(x,y){ctx.fillStyle='rgba(0,0,0,.25)';ctx.beginPath();ctx.ellip
   ctx.fillStyle='#6b4428';ctx.beginPath();ctx.ellipse(x,y-14,14,15,0,0,7);ctx.fill();R('#6b4428',x-6,y-34,12,8);
   R('#c0302a',x-8,y-38,16,6);ctx.fillStyle='#f3e3b0';ctx.fillRect(x-6,y-20,12,10);ctx.fillStyle='#6b4428';ctx.font=`bold 9px ${FT}`;ctx.textAlign='center';ctx.fillText('酒',x,y-12);}
 function drawPArrow(q,x){
-  const d=Math.sign(q.vx),len=q.big?44:38;
-  ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,210,120,.35)';ctx.lineWidth=6;
+  const d=Math.sign(q.vx),len=q.huge?96:q.big?44:38;
+  if(q.huge){ctx.save();ctx.globalCompositeOperation='lighter';circle(x,q.y,26,'rgba(255,220,120,.35)');ctx.restore();}
+  ctx.save();ctx.globalCompositeOperation='lighter';ctx.strokeStyle='rgba(255,210,120,.35)';ctx.lineWidth=q.huge?18:6;
   ctx.beginPath();ctx.moveTo(x-d*(len+30),q.y);ctx.lineTo(x,q.y);ctx.stroke();ctx.restore();
-  ctx.strokeStyle='#e8c070';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(x-d*len,q.y);ctx.lineTo(x,q.y);ctx.stroke();
-  ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(x+d*9,q.y);ctx.lineTo(x,q.y-4);ctx.lineTo(x,q.y+4);ctx.fill();
+  const hs=q.huge?3:1;ctx.strokeStyle=G.wl>=3?WCOL[G.wl]:'#e8c070';ctx.lineWidth=2.5*hs;ctx.beginPath();ctx.moveTo(x-d*len,q.y);ctx.lineTo(x,q.y);ctx.stroke();
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.moveTo(x+d*9*hs,q.y);ctx.lineTo(x,q.y-4*hs);ctx.lineTo(x,q.y+4*hs);ctx.fill();
   R('#c0302a',x-d*len-(d>0?0:8),q.y-4,8,8);
 }
 
@@ -1029,6 +1198,7 @@ function render(){
   if(G.mode==='title')return drawTitle();
   if(G.mode==='select')return drawSelect();
   if(G.mode==='story')return drawStory();
+  if(G.mode==='camp')return drawCamp();
   const S=STAGES[G.stage];
   ctx.save();
   if(cam.shake)ctx.translate(rnd(-1,1)*cam.shake,rnd(-1,1)*cam.shake);
@@ -1045,6 +1215,18 @@ function render(){
     if(q.k==='arrow'){const d=Math.sign(q.vx);ctx.strokeStyle='#d9c08a';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x-d*26,q.y);ctx.lineTo(x,q.y);ctx.stroke();
       ctx.fillStyle='#ddd';ctx.beginPath();ctx.moveTo(x+d*7,q.y);ctx.lineTo(x,q.y-3);ctx.lineTo(x,q.y+3);ctx.fill();R('#eee',x-d*26-(d>0?0:6),q.y-3,6,6);}
     else if(q.k==='parrow')drawPArrow(q,x);
+    else if(q.k==='scres'){const a=Math.min(1,q.life/14);spr('guan','fxArc',x,q.y,q.face,118,a,'lighter');spr('guan','fxArc',x-q.face*18,q.y,q.face,100,a*.5,'lighter');}
+    else if(q.k==='pquake'){ctx.fillStyle='rgba(240,200,110,.8)';ctx.beginPath();ctx.moveTo(x-34,GY);ctx.lineTo(x,GY-48-Math.sin(G.t*.7)*8);ctx.lineTo(x+34,GY);ctx.fill();}
+    else if(q.k==='sky'){
+      if(q.delay>0){ctx.strokeStyle=q.col;ctx.globalAlpha=(G.t>>2)&1?.9:.4;ctx.lineWidth=3;ctx.beginPath();ctx.ellipse(x,GY,46,12,0,0,7);ctx.stroke();ctx.globalAlpha=1;}
+      else{const a=Math.max(0,Math.min(1,q.life/20));ctx.save();ctx.globalAlpha=a;
+        if(q.kind==='rain'){for(let i=0;i<7;i++){const ox=(i-3)*15+hash(i+q.x)*8,top=GY-70-hash(i*3+q.x)*30;
+            ctx.strokeStyle='#e8d6a8';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+ox-14,top);ctx.lineTo(x+ox,GY-6);ctx.stroke();R('#c0302a',x+ox-17,top-4,6,6);}}
+        else{ctx.globalCompositeOperation='lighter';let px=x,py=0;ctx.strokeStyle=q.col;ctx.lineWidth=14;ctx.globalAlpha=a*.35;
+          const pts=[[px,py]];while(py<GY){py+=48;px=x+(hash(py+q.x)-.5)*44;pts.push([px,Math.min(GY,py)]);}
+          const line=()=>{ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(const p2 of pts)ctx.lineTo(p2[0],p2[1]);ctx.stroke();};
+          line();ctx.globalAlpha=a;ctx.lineWidth=4;ctx.strokeStyle='#fff';line();circle(x,GY-6,30*a+10,q.col);}
+        ctx.restore();}}
     else if(q.k==='quake'){ctx.fillStyle='rgba(120,80,40,.55)';ctx.beginPath();ctx.moveTo(x-30,GY);ctx.lineTo(x,GY-34-Math.sin(G.t*.6)*6);ctx.lineTo(x+30,GY);ctx.fill();}
     else if(q.k==='cres'){const a=Math.min(1,q.life/20);
       spr('guan','fxArc',x,q.y,q.face,155,a,'lighter');spr('guan','fxArc',x-q.face*26,q.y,q.face,138,a*.6,'lighter');}
@@ -1061,7 +1243,8 @@ function render(){
   if(G.paused)overlay('일시정지','P / Esc 로 계속');
   if(G.mode==='clear'){overlay(S.name.split('·')[0].trim()+' 완료!','',true);
     txt('점수  '+G.score.toLocaleString(),W/2,290,26,'#fff');txt('남은 체력 보너스  +'+G.bonus.toLocaleString(),W/2,330,20,'#9f9');
-    if(G.ct>70&&(G.t>>5)&1)txt(G.stage+1<STAGES.length?'Enter / 공격 — 다음 장으로':'Enter / 공격 — 계속',W/2,400,20,'#ffe7a0');}
+    txt('군공 포인트 +1500P  (모은 포인트 '+G.pts.toLocaleString()+'P)',W/2,366,19,'#9ff3ff');
+    if(G.ct>70&&(G.t>>5)&1)txt(G.stage+1<STAGES.length?'Enter / 공격 — 군영으로 (무기 강화 · 필살기 구매)':'Enter / 공격 — 계속',W/2,420,20,'#ffe7a0');}
   if(G.mode==='over'){overlay(HERO.name+'이(가) 쓰러졌다…','',true);txt('점수  '+G.score.toLocaleString(),W/2,290,24,'#fff');
     if(G.ct>60&&(G.t>>5)&1)txt('Enter / 공격 — 이 장을 다시 도전',W/2,360,20,'#ffe7a0');}
   if(G.mode==='ending')drawEnding();
@@ -1079,6 +1262,7 @@ function drawHUD(){
   bar(94,36,250,16,p.hp/p.maxhp,'#7ef07a','#2f9a3a','체력');
   bar(94,58,250,12,p.mp/100,p.mp>=50?'#9ff3ff':'#6ab0ff',p.mp>=50?'#2fb4d8':'#2a5cc8','기력');
   R('rgba(255,255,255,.6)',94+125,56,2,16);
+  txt(WEAPON[HERO.id]+' '+'★'.repeat(G.wl),352,42,13,WCOL[G.wl],'left');
   if(p.mp>=50&&(G.t>>4)&1)txt(HERO.spName+' 준비! (X)',352,64,13,'#9ff3ff','left');
   txt(G.score.toLocaleString(),W-20,26,26,'#fff','right');
   txt('최고 '+Math.max(G.hi,G.score).toLocaleString(),W-20,52,13,'#ccc','right');
@@ -1088,7 +1272,8 @@ function drawHUD(){
   const b=enemies.find(e=>e.boss);
   if(b&&!b.dead){R('rgba(0,0,0,.6)',W/2-222,H-46,444,26);txt(b.name,W/2-214,H-58,16,'#ffb0a0','left',FT);
     bar(W/2-218,H-42,436,18,b.hp/b.max,'#ff7a5a','#a8261e');}
-  if(muted)txt('🔇',W-20,78,14,'#fff','right');
+  txt('군공 '+G.pts.toLocaleString()+'P',W-20,74,15,'#9ff3ff','right');
+  if(muted)txt('🔇',W-20,98,14,'#fff','right');
 }
 function drawBanner(){
   const b=banner,a=Math.min(1,b.t/25,(200-b.t+30)/25);
@@ -1097,6 +1282,7 @@ function drawBanner(){
   goldText(b.text,W/2,H/2-18,b.boss?50:44);txt(b.sub,W/2,H/2+30,20,b.boss?'#ffb0a0':'#eee','center',FT);
   ctx.restore();
 }
+const TBTN_W=280,TBTN_Y=482,TBTN_X=[W/2-TBTN_W-12,W/2+12];
 function drawTitle(){
   drawBG('field',G.t*.6);
   ctx.fillStyle='rgba(12,8,4,.5)';ctx.fillRect(0,0,W,H);
@@ -1107,7 +1293,10 @@ function drawTitle(){
   R('rgba(0,0,0,.5)',650,250,280,150);
   const L=[['이동','← →  /  A D'],['점프','↑ / Space / K'],['공격 (3연격)','Z  /  J'],['필살기','X / L (기력 50)'],['일시정지 · 소리','P  ·  M']];
   L.forEach((l,i)=>{txt(l[0],666,272+i*27,14,'#ffe7a0','left');txt(l[1],916,272+i*27,14,'#fff','right');});
-  if((G.t>>5)&1)txt('Enter  또는  화면을 눌러 시작',W/2,505,22,'#fff');
+  if(G.save){const lab=['새로 시작','이어하기 · '+STAGES[G.save.stage].name.split('·')[0].trim()];
+    for(let i=0;i<2;i++){const x=TBTN_X[i],on=G.tsel===i;R(on?'rgba(120,70,20,.9)':'rgba(0,0,0,.6)',x,TBTN_Y,TBTN_W,44);
+      ctx.strokeStyle=on?'#f2c14e':'rgba(255,255,255,.3)';ctx.lineWidth=on?3:1;ctx.strokeRect(x,TBTN_Y,TBTN_W,44);txt(lab[i],x+TBTN_W/2,TBTN_Y+23,19,on?'#ffe7a0':'#ddd','center',FT);}}
+  else if((G.t>>5)&1)txt('Enter  또는  화면을 눌러 시작',W/2,505,22,'#fff');
   txt('최고 점수  '+G.hi.toLocaleString(),795,425,14,'#ccc');
 }
 function drawSelect(){
@@ -1130,10 +1319,30 @@ function drawSelect(){
   R('rgba(0,0,0,.6)',60,412,840,108);
   txt(h.name+' '+h.zi+'  —  '+h.title,80,432,20,'#ffe7a0','left',FT);
   txt(h.desc,80,462,15,'#eee','left');
-  txt('필살기 · '+h.spName,80,492,15,'#9ff3ff','left');
+  txt('무기 · '+WEAPON[h.id]+' ('+WDESC[h.id]+')      필살기 · '+SPS[h.id][0].name,80,492,15,'#9ff3ff','left');
   const st=[['체력',h.hp/125],['속도',h.spd/5.2],['힘',h.pow/1.25],['사거리',h.reach/1.15]];
   st.forEach((s,i)=>{const yy=428+i*21;txt(s[0],640,yy+6,13,'#ccc','left');R('#2a2420',700,yy,180,12);R(h.col,700,yy,180*s[1],12);});
   if((G.t>>5)&1)txt('← → 선택   ·   Enter / 공격 결정',W/2,H-8,14,'#ffe7a0');
+}
+function drawCamp(){
+  drawBG(STAGES[G.stage].theme,G.t*.3);
+  ctx.fillStyle='rgba(8,5,3,.72)';ctx.fillRect(0,0,W,H);
+  goldText('군영 — 출진 준비',W/2,48,40);
+  txt('군공 '+G.pts.toLocaleString()+'P',W-34,50,24,'#9ff3ff','right');
+  R('rgba(20,16,12,.82)',40,CAMP_Y,270,354);ctx.strokeStyle=HERO.col;ctx.lineWidth=2;ctx.strokeRect(40,CAMP_Y,270,354);
+  if(G.wl>=2){ctx.save();ctx.globalCompositeOperation='lighter';circle(175,300,70+G.wl*8,WCOL[G.wl]+'2a');ctx.restore();}
+  ctx.save();ctx.beginPath();ctx.rect(40,CAMP_Y,270,354);ctx.clip();
+  spr(HERO.set,HERO.anim.idle[(G.t/10|0)%HERO.anim.idle.length],175,392,1,200);ctx.restore();
+  txt(HERO.name+' '+HERO.zi,175,414,22,'#ffe7a0','center',FT);
+  txt(WEAPON[HERO.id]+'  '+'★'.repeat(G.wl),175,440,16,WCOL[G.wl]);
+  txt('체력 '+Math.round(G.carryHP)+' / '+MAXHP()+'   ·   필살 '+HERO.spName,175,456,12,'#cfe');
+  campRows().forEach((o,i)=>{const y=CAMP_Y+i*CAMP_H,on=i===G.csel,h=CAMP_H-8;
+    R(on?'rgba(110,40,20,.9)':o.exit?'rgba(60,40,10,.85)':'rgba(20,16,12,.8)',330,y,590,h);
+    ctx.strokeStyle=on?'#f2c14e':'rgba(255,255,255,.18)';ctx.lineWidth=on?3:1;ctx.strokeRect(330,y,590,h);
+    txt(o.t,346,y+h/2+1,17,o.exit?'#ffe7a0':'#fff','left',o.exit?FT:FU);
+    if(o.s)txt(o.s,906,y+h/2+1,14,o.eq?'#8f8':o.own?'#c9a2ff':o.c>G.pts?'#ff8a7a':'#9ff3ff','right');});
+  if(G.cmsgT>0)txt(G.cmsg,625,494,19,'#ffe7a0','center',FT);
+  txt('↑↓ 또는 ◀▶ 고르기  ·  공격 / Enter 로 구매·장착  ·  화면을 두 번 눌러도 됩니다  ·  진행은 자동 저장',W/2,524,13,'#ccc');
 }
 function drawEnding(){
   ctx.fillStyle='rgba(0,0,0,.72)';ctx.fillRect(0,0,W,H);
